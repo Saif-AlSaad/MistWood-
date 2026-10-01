@@ -19,12 +19,93 @@ export interface Palette {
   night: number;
 }
 
+export type FoxPeltId = "ember" | "silver" | "spirit" | "autumn" | "shadow";
+
+export interface FoxPelt {
+  id: FoxPeltId;
+  name: string;
+  title: string;
+  cost: number;
+  bodyColor: string;
+  accentColor: string;
+  eyeColor: string;
+  trailColor: string;
+  description: string;
+  perk: string;
+}
+
+export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
+  ember: {
+    id: "ember",
+    name: "Ember Fox",
+    title: "The Wild Wanderer",
+    cost: 0,
+    bodyColor: "#1d120a",
+    accentColor: "#ffd27a",
+    eyeColor: "#ffe9bb",
+    trailColor: "#ff9f43",
+    description: "The classic forest guardian with an untamed spirit and fiery footsteps.",
+    perk: "Standard stride & fiery ember sparks",
+  },
+  silver: {
+    id: "silver",
+    name: "Silver Moon",
+    title: "Child of Moonlight",
+    cost: 35,
+    bodyColor: "#101624",
+    accentColor: "#93c5fd",
+    eyeColor: "#e0f2fe",
+    trailColor: "#67e8f9",
+    description: "Forged under winter constellations. Its steps whisper like frost upon the moss.",
+    perk: "Moonlit crystalline trail & cool shimmer",
+  },
+  spirit: {
+    id: "spirit",
+    name: "Spirit Wisp",
+    title: "The Celestial Ghost",
+    cost: 80,
+    bodyColor: "#081d1c",
+    accentColor: "#5eead4",
+    eyeColor: "#ccfbf1",
+    trailColor: "#2dd4bf",
+    description: "A translucent apparition that flickers between dream and the waking woods.",
+    perk: "Ethereal translucent body & celestial motes",
+  },
+  autumn: {
+    id: "autumn",
+    name: "Autumn Bramble",
+    title: "Keeper of the Grove",
+    cost: 150,
+    bodyColor: "#241306",
+    accentColor: "#fbbf24",
+    eyeColor: "#fef3c7",
+    trailColor: "#f59e0b",
+    description: "Cloaked in golden leaves and rich loam, smelling of ancient cedar trees.",
+    perk: "Golden sunburst sparks & autumn aura",
+  },
+  shadow: {
+    id: "shadow",
+    name: "Obsidian Void",
+    title: "Shadow of the Pines",
+    cost: 250,
+    bodyColor: "#0d0918",
+    accentColor: "#c084fc",
+    eyeColor: "#f3e8ff",
+    trailColor: "#a855f7",
+    description: "Born from the deepest hollows where starlight bends into silence.",
+    perk: "Deep void violet silhouette & phantom sparks",
+  },
+};
+
 export interface Stats {
   dist: number;
   flies: number;
   best: number;
   newBest: boolean;
   nearMisses: number;
+  maxSpeed: number;
+  biomeName: string;
+  totalFlies: number;
 }
 
 export interface HUDData {

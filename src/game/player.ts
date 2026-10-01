@@ -1,8 +1,8 @@
 /* The fox — a hand-drawn silhouette with procedural trot gait, squash & stretch,
    coyote time, jump buffering and variable jump height for a game-feel-first run */
 
-import type { Palette } from "./types";
-import { rgb, clamp, lerp, TAU } from "./types";
+import type { FoxPelt, Palette } from "./types";
+import { FOX_PELTS, rgb, clamp, lerp, TAU } from "./types";
 
 const GRAVITY = 2100;
 const JUMP_V = 720;
@@ -148,6 +148,7 @@ export class Player {
     pal: Palette,
     time: number,
     k: number,
+    pelt: FoxPelt = FOX_PELTS.ember,
   ): void {
     const fade = this.dead ? Math.max(0, 1 - this.deadT * 1.8) : 1;
     if (fade <= 0) return;
@@ -169,7 +170,7 @@ export class Player {
       ctx.fill();
     }
 
-    const col = rgb(pal.ground);
+    const col = pelt.id === "spirit" ? "rgba(94, 234, 212, 0.55)" : (pelt.bodyColor || rgb(pal.ground));
 
     ctx.save();
     ctx.translate(x, gy - this.py);
@@ -182,14 +183,15 @@ export class Player {
       sy *= 0.58;
     }
     ctx.scale(sx, sy);
-    ctx.globalAlpha = (this.ghostT > 0 ? 0.7 : 1) * fade;
+    ctx.globalAlpha = (this.ghostT > 0 ? 0.7 : (pelt.id === "spirit" ? 0.8 : 1)) * fade;
 
-    // ghost-bloom aura
-    if (this.ghostT > 0) {
-      const flick = 0.3 + Math.sin(time * 18) * 0.08;
+    // ghost-bloom aura or celestial spirit wisp aura
+    if (this.ghostT > 0 || pelt.id === "spirit") {
+      const auraColor = this.ghostT > 0 ? pal.accent : [94, 234, 212] as [number, number, number];
+      const flick = (this.ghostT > 0 ? 0.3 : 0.15) + Math.sin(time * 18) * 0.06;
       const gr = ctx.createRadialGradient(0, -26, 4, 0, -26, 54);
-      gr.addColorStop(0, rgb(pal.accent, flick));
-      gr.addColorStop(1, rgb(pal.accent, 0));
+      gr.addColorStop(0, rgb(auraColor, flick));
+      gr.addColorStop(1, rgb(auraColor, 0));
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       ctx.fillStyle = gr;
@@ -260,9 +262,11 @@ export class Player {
     ctx.moveTo(-32, -27 + wave * 0.7);
     ctx.quadraticCurveTo(-37, -21 + wave, -39, -13 + wave);
     ctx.stroke();
-    ctx.fillStyle = col;
+
+    // tail tip glow/accent
+    ctx.fillStyle = pelt.accentColor;
     ctx.beginPath();
-    ctx.arc(-39, -12 + wave, 4.6, 0, TAU);
+    ctx.arc(-39, -12 + wave, 4.8, 0, TAU);
     ctx.fill();
 
     // ---- body + head + ears (single filled silhouette) ----
@@ -290,8 +294,15 @@ export class Player {
     ctx.fillStyle = col;
     ctx.fill(p);
 
-    // subtle rim light so the silhouette reads against dark ground
-    ctx.strokeStyle = rgb(pal.rim, 0.28 + (this.ghostT > 0 ? 0.35 : 0));
+    // glowing spirit eye
+    ctx.fillStyle = pelt.eyeColor;
+    ctx.beginPath();
+    ctx.arc(31, -47.5, 1.4, 0, TAU);
+    ctx.fill();
+
+    // subtle rim light with pelt accent
+    ctx.strokeStyle = pelt.accentColor;
+    ctx.globalAlpha = (this.ghostT > 0 ? 0.75 : 0.38) * fade;
     ctx.lineWidth = 1.4;
     ctx.lineJoin = "round";
     ctx.stroke(p);

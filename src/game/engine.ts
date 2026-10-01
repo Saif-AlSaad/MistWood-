@@ -4,8 +4,8 @@ import { AudioEngine } from "./audio";
 import { Particles } from "./particles";
 import { Player } from "./player";
 import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
-import type { Bloom, Fly, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
-import { clamp, rand, rgb } from "./types";
+import type { Bloom, Fly, FoxPelt, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
+import { FOX_PELTS, clamp, rand, rgb } from "./types";
 
 interface EngineCallbacks {
   onState: (s: GameState) => void;
@@ -23,6 +23,7 @@ export class Engine {
   state: GameState = "loading";
   best = 0;
   muted = false;
+  pelt: FoxPelt = FOX_PELTS.ember;
 
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -66,6 +67,7 @@ export class Engine {
   private nearMisses = 0;
   private slowMoTimer = 0;
   private hudTimer = 0;
+  private maxSpeedReached = 340;
 
   constructor(canvas: HTMLCanvasElement, cb: EngineCallbacks) {
     this.canvas = canvas;
@@ -114,6 +116,10 @@ export class Engine {
     this.cb.onState(s);
   }
 
+  setPelt(pelt: FoxPelt): void {
+    this.pelt = pelt;
+  }
+
   start(): void {
     this.audio.ensure();
     this.player.reset();
@@ -124,6 +130,7 @@ export class Engine {
     this.scroll = 0;
     this.dist = 0;
     this.speed = 340;
+    this.maxSpeedReached = 340;
     this.fliesN = 0;
     this.nearMisses = 0;
     this.slowMoTimer = 0;
@@ -446,18 +453,25 @@ export class Engine {
         }
         this.timeScale = 1;
         this.setState("over");
+        const segIdx = Math.floor(this.dist / 600) % SEGMENTS.length;
         this.cb.onGameOver({
           dist: distM,
           flies: this.fliesN,
           best: this.best,
           newBest,
           nearMisses: this.nearMisses,
+          maxSpeed: this.maxSpeedReached,
+          biomeName: SEGMENTS[segIdx].name,
+          totalFlies: this.fliesN,
         });
       }
     }
 
     if (playing) {
       this.speed = 340 + Math.min(470, this.dist * 0.42);
+      if (this.speed > this.maxSpeedReached) {
+        this.maxSpeedReached = Math.round(this.speed);
+      }
       this.scroll += this.speed * dt;
       this.dist += (this.speed * dt) / 16;
       this.slideImpulseT -= dt;
@@ -536,6 +550,7 @@ export class Engine {
     this.particles.update(dt, -40);
     this.world.updateAmbient(dt, this.w, this.h, this.time);
     this.audio.maybeChirp(dt, this.world.pal.night);
+    this.audio.updateMusic(dt, phase);
     this.shake = Math.max(0, this.shake - dt * 26);
   }
 
@@ -708,7 +723,7 @@ export class Engine {
     this.world.renderFlora(ctx, w, gy, this.scroll, this.time);
 
     if (this.state !== "menu" && this.state !== "over") {
-      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale);
+      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale, this.pelt);
     }
 
     this.particles.renderFlat(ctx, pal);

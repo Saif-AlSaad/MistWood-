@@ -166,6 +166,65 @@ export class AudioEngine {
     }
   }
 
+  private chordTimer = 1.2;
+
+  /** generative pentatonic ambient chord ambiance */
+  updateMusic(dt: number, phase: number): void {
+    if (!this.ctx || this.muted) return;
+    this.chordTimer -= dt;
+    if (this.chordTimer > 0) return;
+    this.chordTimer = rand(6.5, 9.5);
+
+    const normPhase = ((phase % 4) + 4) % 4;
+    const pIdx = Math.floor(normPhase);
+
+    // Pentatonic scales for Dawn, Midday, Dusk, Night
+    const scales: number[][] = [
+      [146.83, 220.0, 293.66, 369.99, 440.0, 587.33], // Dawn (D maj)
+      [196.0, 246.94, 293.66, 392.0, 493.88, 587.33], // Midday (G maj)
+      [110.0, 164.81, 220.0, 261.63, 329.63, 440.0],  // Dusk (A min)
+      [146.83, 174.61, 220.0, 293.66, 349.23, 440.0], // Night (D min)
+    ];
+
+    const scale = scales[pIdx % 4];
+    const root = scale[0];
+    const n1 = scale[1 + ((Math.random() * 2) | 0)];
+    const n2 = scale[3 + ((Math.random() * 2) | 0)];
+    const chordNotes = [root, n1, n2];
+    if (Math.random() < 0.6) chordNotes.push(scale[scale.length - 1]);
+
+    const startT = this.t + 0.05;
+    const chordDur = rand(5.5, 7.5);
+    for (let i = 0; i < chordNotes.length; i++) {
+      const noteDelay = i * rand(0.08, 0.22);
+      this.padTone(chordNotes[i], chordDur - noteDelay, startT + noteDelay, 0.032);
+    }
+  }
+
+  private padTone(freq: number, dur: number, at: number, gainVal: number): void {
+    if (!this.ctx || !this.master) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, at);
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(Math.min(1600, freq * 3.4), at);
+
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(gainVal, at + 1.2);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.master);
+
+    osc.start(at);
+    osc.stop(at + dur + 0.1);
+  }
+
   jump(): void {
     this.noise({ dur: 0.17, f0: 480, f1: 1500, g: 0.16, q: 1.2 });
   }
