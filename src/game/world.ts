@@ -203,11 +203,11 @@ export class WorldRenderer {
 
   private buildStatic(): void {
     const [far, farX] = makeCanvas(2048, 340);
-    this.ridge(farX, 2048, 340, 96, 0.42, 0.16);
+    this.ridge(farX, 2048, 340, 116, 0.44, 0.15, true);
     this.farMask = far;
 
     const [near, nearX] = makeCanvas(2048, 400);
-    this.ridge(nearX, 2048, 400, 44, 0.6, 0.5);
+    this.ridge(nearX, 2048, 400, 52, 0.62, 0.36, false);
     this.nearMask = near;
 
     const [trk, trkX] = makeCanvas(3072, 900);
@@ -251,113 +251,450 @@ export class WorldRenderer {
     });
   }
 
-  /** seamless ridge of hills + conifer/broadleaf silhouettes */
+  /**
+   * Evaluates a multi-harmonic fractal hill curve that wraps perfectly at w
+   */
+  private ridgeHeight(px: number, w: number, h: number): number {
+    const u = (px / w) * TAU;
+    return (
+      h -
+      h * 0.34 -
+      Math.sin(u * 2 + 1.2) * h * 0.055 -
+      Math.sin(u * 5 + 3.8) * h * 0.038 -
+      Math.sin(u * 9 + 0.5) * h * 0.02 -
+      Math.sin(u * 17 + 2.3) * h * 0.011 -
+      Math.sin(u * 31 + 4.1) * h * 0.005
+    );
+  }
+
+  /**
+   * Photorealistic conifer (fir, spruce, pine) with tapered trunk,
+   * needle spire apex, serrated jagged needle boughs, and drooping branch tips
+   */
+  private drawRealisticConifer(
+    x: CanvasRenderingContext2D,
+    tx: number,
+    baseY: number,
+    th: number,
+    tw: number,
+    seed: number,
+  ): void {
+    const lean = (hash(seed, 101) - 0.5) * tw * 0.14;
+    const rootW = Math.max(3, tw * 0.11);
+    const topW = 0.9;
+    const spireY = baseY - th;
+    const trunkTopY = baseY - th * 0.88;
+
+    // 1. Tapered trunk with root flare
+    x.beginPath();
+    x.moveTo(tx - rootW * 1.5, baseY + 3);
+    x.quadraticCurveTo(tx - rootW * 0.8, baseY - th * 0.25, tx + lean * 0.7 - topW, trunkTopY);
+    x.lineTo(tx + lean * 0.7 + topW, trunkTopY);
+    x.quadraticCurveTo(tx + rootW * 0.8, baseY - th * 0.25, tx + rootW * 1.5, baseY + 3);
+    x.closePath();
+    x.fill();
+
+    // 2. Apical needle spire tip
+    x.beginPath();
+    x.moveTo(tx + lean - 1.4, trunkTopY);
+    x.lineTo(tx + lean, spireY);
+    x.lineTo(tx + lean + 1.4, trunkTopY);
+    x.closePath();
+    x.fill();
+
+    // Small spire needle whorls
+    for (let s = 1; s <= 3; s++) {
+      const sy = spireY + (trunkTopY - spireY) * (s / 3.5);
+      const sw = tw * 0.13 * (s / 3.5);
+      x.beginPath();
+      x.moveTo(tx + lean, sy - 3);
+      x.lineTo(tx + lean - sw, sy + 3);
+      x.lineTo(tx + lean - sw * 0.4, sy + 1.5);
+      x.lineTo(tx + lean, sy + 3.5);
+      x.lineTo(tx + lean + sw * 0.4, sy + 1.5);
+      x.lineTo(tx + lean + sw, sy + 3);
+      x.closePath();
+      x.fill();
+    }
+
+    // 3. Main needle bough whorls (8 to 13 tiers)
+    const tiers = Math.max(8, Math.min(13, Math.floor(th / 13)));
+    for (let tr = 0; tr < tiers; tr++) {
+      const fr = (tr + 1) / (tiers + 1);
+      const ty = spireY + th * (0.12 + fr * 0.76);
+      const trLean = lean * fr;
+      const cx = tx + trLean;
+
+      const curveW = Math.pow(fr, 0.72) * tw;
+      const leftW = curveW * (0.82 + hash(seed * 17 + tr * 3, 102) * 0.36);
+      const rightW = curveW * (0.82 + hash(seed * 19 + tr * 5, 103) * 0.36);
+
+      const droop = th * 0.038 * (0.4 + fr * 0.8);
+      const tierH = th * 0.085 * (0.7 + fr * 0.5);
+
+      // Left bough with serrated needle fringe
+      x.beginPath();
+      x.moveTo(cx, ty - tierH * 0.4);
+      x.quadraticCurveTo(cx - leftW * 0.55, ty - tierH * 0.08, cx - leftW, ty + droop);
+      const teethL = 3 + Math.floor(fr * 3);
+      for (let t = teethL - 1; t >= 0; t--) {
+        const p = t / teethL;
+        const notchX = cx - leftW * p;
+        const toothY = ty + droop * p + (t % 2 === 1 ? tierH * 0.35 : -tierH * 0.08);
+        x.lineTo(notchX, toothY);
+      }
+      x.lineTo(cx, ty + tierH * 0.2);
+      x.closePath();
+      x.fill();
+
+      // Right bough with serrated needle fringe
+      x.beginPath();
+      x.moveTo(cx, ty - tierH * 0.4);
+      x.quadraticCurveTo(cx + rightW * 0.55, ty - tierH * 0.08, cx + rightW, ty + droop);
+      const teethR = 3 + Math.floor(fr * 3);
+      for (let t = teethR - 1; t >= 0; t--) {
+        const p = t / teethR;
+        const notchX = cx + rightW * p;
+        const toothY = ty + droop * p + (t % 2 === 1 ? tierH * 0.35 : -tierH * 0.08);
+        x.lineTo(notchX, toothY);
+      }
+      x.lineTo(cx, ty + tierH * 0.2);
+      x.closePath();
+      x.fill();
+    }
+
+    // 4. Lower dead twig stubs
+    for (let d = 0; d < 2; d++) {
+      const dy = baseY - th * (0.07 + d * 0.05);
+      const dir = hash(seed * 11 + d, 104) > 0.5 ? 1 : -1;
+      const len = tw * (0.16 + hash(seed * 13 + d, 105) * 0.22);
+      x.lineWidth = 1.2;
+      x.beginPath();
+      x.moveTo(tx, dy);
+      x.lineTo(tx + dir * len, dy - 2);
+      x.stroke();
+    }
+  }
+
+  /**
+   * Photorealistic broadleaf tree (oak, maple, elderwood) with
+   * spreading branch skeleton and organic ruffled foliage masses (no smooth discs)
+   */
+  private drawRealisticBroadleaf(
+    x: CanvasRenderingContext2D,
+    tx: number,
+    baseY: number,
+    th: number,
+    tw: number,
+    seed: number,
+  ): void {
+    const rootW = Math.max(3.5, tw * 0.12);
+    const forkY = baseY - th * (0.36 + hash(seed, 201) * 0.14);
+
+    // 1. Gnarled trunk
+    x.beginPath();
+    x.moveTo(tx - rootW * 1.5, baseY + 3);
+    x.quadraticCurveTo(tx - rootW * 0.8, (baseY + forkY) / 2, tx - rootW * 0.5, forkY);
+    x.lineTo(tx + rootW * 0.5, forkY);
+    x.quadraticCurveTo(tx + rootW * 0.8, (baseY + forkY) / 2, tx + rootW * 1.5, baseY + 3);
+    x.closePath();
+    x.fill();
+
+    // 2. Main spreading branch limbs
+    const branchCount = 4 + Math.floor(hash(seed, 202) * 2);
+    const lobes: { x: number; y: number; r: number }[] = [];
+
+    for (let b = 0; b < branchCount; b++) {
+      const angleFr = (b - (branchCount - 1) / 2) / (branchCount / 2);
+      const spreadX = angleFr * tw * (0.45 + hash(seed + b * 5, 203) * 0.25);
+      const reachY = th * (0.65 + hash(seed + b * 7, 204) * 0.28);
+      const endX = tx + spreadX;
+      const endY = baseY - reachY;
+      const ctrlX = tx + spreadX * 0.5 + (hash(seed + b * 3, 205) - 0.5) * tw * 0.2;
+      const ctrlY = (forkY + endY) / 2 + (hash(seed + b * 9, 206) - 0.5) * th * 0.1;
+
+      x.lineWidth = Math.max(2, rootW * (0.6 - (reachY / th) * 0.3));
+      x.beginPath();
+      x.moveTo(tx, forkY);
+      x.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+      x.stroke();
+
+      lobes.push({
+        x: endX,
+        y: endY,
+        r: tw * (0.28 + hash(seed + b * 11, 207) * 0.18),
+      });
+
+      if (hash(seed + b * 13, 208) > 0.35) {
+        lobes.push({
+          x: (ctrlX + endX) / 2 + (hash(seed + b * 17, 209) - 0.5) * tw * 0.16,
+          y: (ctrlY + endY) / 2,
+          r: tw * (0.2 + hash(seed + b * 19, 210) * 0.14),
+        });
+      }
+    }
+
+    // Central crown lobe
+    lobes.push({
+      x: tx + (hash(seed, 211) - 0.5) * tw * 0.2,
+      y: baseY - th * 0.78,
+      r: tw * 0.32,
+    });
+
+    // 3. Render organic ruffled foliage clusters (natural leaf outlines)
+    for (let i = 0; i < lobes.length; i++) {
+      const lobe = lobes[i];
+      const points = 11;
+      x.beginPath();
+      for (let p = 0; p <= points; p++) {
+        const idx = p % points;
+        const angle = (idx / points) * TAU;
+        const r = lobe.r * (0.78 + hash(seed * 23 + i * 31 + idx * 7, 212) * 0.42);
+        const px = lobe.x + Math.cos(angle) * r;
+        const py = lobe.y + Math.sin(angle) * r * 0.88;
+        if (p === 0) {
+          x.moveTo(px, py);
+        } else {
+          const prevAngle = ((idx - 0.5) / points) * TAU;
+          const cr = lobe.r * (0.86 + hash(seed * 29 + i * 37 + idx * 5, 213) * 0.32);
+          const cpx = lobe.x + Math.cos(prevAngle) * cr;
+          const cpy = lobe.y + Math.sin(prevAngle) * cr * 0.88;
+          x.quadraticCurveTo(cpx, cpy, px, py);
+        }
+      }
+      x.closePath();
+      x.fill();
+    }
+  }
+
+  /**
+   * Ancient weathered dead tree snag with broken crown and spiky limbs
+   */
+  private drawRealisticSnag(
+    x: CanvasRenderingContext2D,
+    tx: number,
+    baseY: number,
+    th: number,
+    tw: number,
+    seed: number,
+  ): void {
+    const rootW = Math.max(3, tw * 0.11);
+    const lean = (hash(seed, 301) - 0.5) * tw * 0.22;
+    const breakY = baseY - th * (0.68 + hash(seed, 302) * 0.24);
+
+    x.beginPath();
+    x.moveTo(tx - rootW * 1.5, baseY + 3);
+    x.quadraticCurveTo(tx - rootW * 0.8 + lean * 0.4, (baseY + breakY) / 2, tx - rootW * 0.4 + lean, breakY);
+    // Splintered broken crown
+    x.lineTo(tx + lean - 1, breakY - 7);
+    x.lineTo(tx + lean + 1, breakY - 3);
+    x.lineTo(tx + lean + 3, breakY - 9);
+    x.lineTo(tx + rootW * 0.4 + lean, breakY);
+    x.quadraticCurveTo(tx + rootW * 0.8 + lean * 0.4, (baseY + breakY) / 2, tx + rootW * 1.5, baseY + 3);
+    x.closePath();
+    x.fill();
+
+    // Spiky bare antler limbs
+    x.lineWidth = rootW * 0.6;
+    const limbs = 3 + Math.floor(hash(seed, 303) * 3);
+    for (let l = 0; l < limbs; l++) {
+      const ly = baseY - th * (0.3 + hash(seed + l * 5, 304) * 0.45);
+      const dir = hash(seed + l * 7, 305) > 0.5 ? 1 : -1;
+      const len = tw * (0.35 + hash(seed + l * 9, 306) * 0.35);
+      const lx = tx + lean * (1 - (baseY - ly) / th);
+      x.beginPath();
+      x.moveTo(lx, ly);
+      x.quadraticCurveTo(lx + dir * len * 0.5, ly - 8, lx + dir * len, ly - 4 + hash(seed + l, 307) * 14);
+      x.stroke();
+    }
+  }
+
+  /**
+   * Underbrush, ferns, and salal clusters along the forest ridge
+   */
+  private drawRidgeUnderbrush(
+    x: CanvasRenderingContext2D,
+    tx: number,
+    baseY: number,
+    seed: number,
+  ): void {
+    const stems = 4 + Math.floor(hash(seed, 401) * 3);
+    for (let s = 0; s < stems; s++) {
+      const a = -Math.PI / 2 + (s - (stems - 1) / 2) * 0.4 + (hash(seed + s, 402) - 0.5) * 0.2;
+      const len = 7 + hash(seed + s * 3, 403) * 13;
+      const ex = tx + Math.cos(a) * len;
+      const ey = baseY + Math.sin(a) * len * 0.8;
+      x.lineWidth = 1.4;
+      x.beginPath();
+      x.moveTo(tx, baseY + 2);
+      x.quadraticCurveTo(tx + Math.cos(a) * len * 0.5, baseY - len * 0.5, ex, ey);
+      x.stroke();
+      x.beginPath();
+      x.ellipse(ex, ey, 3.2, 1.8, a, 0, TAU);
+      x.fill();
+    }
+  }
+
+  /**
+   * Seamless ridge of natural forest hills + realistic conifer/broadleaf silhouettes
+   */
   private ridge(
-    x: CanvasRenderingContext2D, w: number, h: number,
-    trees: number, sizeK: number, broad: number,
+    x: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    trees: number,
+    sizeK: number,
+    broad: number,
+    isFar = false,
   ): void {
     x.fillStyle = "#ffffff";
-    // rolling hill line from wrapped sines
+    x.strokeStyle = "#ffffff";
+
+    // 1. Natural multi-harmonic rolling ground baseline
     x.beginPath();
     x.moveTo(0, h);
-    for (let px = 0; px <= w; px += 8) {
-      const u = (px / w) * TAU;
-      const y =
-        h - h * 0.34 -
-        Math.sin(u * 3 + 1) * h * 0.075 -
-        Math.sin(u * 7 + 4) * h * 0.05 -
-        Math.sin(u * 13) * h * 0.02;
-      x.lineTo(px, y);
+    for (let px = 0; px <= w; px += 4) {
+      x.lineTo(px, this.ridgeHeight(px, w, h));
     }
     x.lineTo(w, h);
     x.closePath();
     x.fill();
 
-    // trees — placement is index-periodic so the tile wraps seamlessly
+    // 2. Lush underbrush along the ridge line
+    if (!isFar) {
+      const brushSteps = Math.floor(w / 32);
+      for (let b = 0; b < brushSteps; b++) {
+        const bx = b * 32 + hash(b, 501) * 20;
+        const by = this.ridgeHeight(bx % w, w, h);
+        this.drawRidgeUnderbrush(x, bx, by, b * 31);
+        if (bx < 40) this.drawRidgeUnderbrush(x, bx + w, this.ridgeHeight((bx + w) % w, w, h), b * 31);
+        if (bx > w - 40) this.drawRidgeUnderbrush(x, bx - w, this.ridgeHeight((bx - w + w) % w, w, h), b * 31);
+      }
+    }
+
+    // 3. Dense, natural forest silhouettes
     const step = w / trees;
     for (let i = 0; i < trees; i++) {
-      if (hash(i, 21) < 0.12) continue; // gaps
-      const tx = i * step + hash(i, 5) * step * 0.6;
-      const u = (tx / w) * TAU;
-      const baseY =
-        h - h * 0.34 - Math.sin(u * 3 + 1) * h * 0.075 - Math.sin(u * 7 + 4) * h * 0.05;
-      const th = h * sizeK * (0.55 + hash(i, 6) * 0.75);
-      const tw = th * (0.34 + hash(i, 7) * 0.12);
-      if (hash(i, 8) < broad) {
-        // broadleaf — cluster of discs
-        x.beginPath();
-        for (let b = 0; b < 4; b++) {
-          const bx = tx + (hash(i * 4 + b, 11) - 0.5) * tw * 1.6;
-          const by = baseY - th * (0.55 + hash(i * 4 + b, 12) * 0.5);
-          const br = tw * (0.55 + hash(i * 4 + b, 13) * 0.5);
-          x.moveTo(bx + br, by);
-          x.arc(bx, by, br, 0, TAU);
+      if (hash(i, 21) < (isFar ? 0.05 : 0.12)) continue; // gaps
+
+      const tx = i * step + hash(i, 5) * step * 0.7;
+      const baseY = this.ridgeHeight(tx % w, w, h);
+      const th = h * sizeK * (0.6 + hash(i, 6) * 0.7);
+      const tw = th * (isFar ? 0.3 : 0.38 + hash(i, 7) * 0.12);
+      const isBroadleaf = hash(i, 8) < broad;
+      const isSnag = !isFar && !isBroadleaf && hash(i, 9) > 0.92;
+
+      const renderTreeAt = (atX: number) => {
+        if (isSnag) {
+          this.drawRealisticSnag(x, atX, baseY, th * 0.75, tw * 0.8, i * 47);
+        } else if (isBroadleaf) {
+          this.drawRealisticBroadleaf(x, atX, baseY, th, tw, i * 47);
+        } else {
+          this.drawRealisticConifer(x, atX, baseY, th, tw, i * 47);
         }
-        x.fill();
-        x.fillRect(tx - 2, baseY - th * 0.6, 4, th * 0.62);
-      } else {
-        // pine — stacked tiers
-        const tiers = 4;
-        for (let tr = 0; tr < tiers; tr++) {
-          const fr = tr / tiers;
-          const ty = baseY - th * (0.35 + fr * 0.6);
-          const tww = tw * (1 - fr * 0.75);
-          x.beginPath();
-          x.moveTo(tx - tww / 2, ty + th * 0.18);
-          x.quadraticCurveTo(tx, ty - th * 0.12, tx + tww / 2, ty + th * 0.18);
-          x.closePath();
-          x.fill();
-        }
-        x.fillRect(tx - 2, baseY - th * 0.4, 4, th * 0.42);
-      }
+      };
+
+      // Draw tree and wrap seamlessly across texture boundaries
+      renderTreeAt(tx);
+      if (tx - tw < 0) renderTreeAt(tx + w);
+      if (tx + tw > w) renderTreeAt(tx - w);
     }
   }
 
-  /** giant near trunks with mossy canopy — the "inside the forest" layer */
+  /**
+   * Giant foreground/midground trunks with natural bark, branching boughs,
+   * organic ruffled canopy masses, and hanging moss/lichen tendrils
+   */
   private trunks(x: CanvasRenderingContext2D, w: number, h: number): void {
     x.fillStyle = "#ffffff";
+    x.strokeStyle = "#ffffff";
     const n = 5;
     const step = w / n;
+
     for (let i = 0; i < n; i++) {
       const tx = i * step + step * 0.2 + hash(i, 31) * step * 0.5;
-      const tw = 30 + hash(i, 32) * 42;
-      const lean = (hash(i, 33) - 0.5) * 60;
-      // trunk body with flared base
-      x.beginPath();
-      x.moveTo(tx - tw / 2, h);
-      x.quadraticCurveTo(tx - tw / 2 + lean * 0.3, h * 0.5, tx - tw * 0.32 + lean, -40);
-      x.lineTo(tx + tw * 0.32 + lean, -40);
-      x.quadraticCurveTo(tx + tw / 2 + lean * 0.3, h * 0.5, tx + tw / 2 + tw * 0.5, h);
-      x.closePath();
-      x.fill();
-      // branch stubs
-      for (let b = 0; b < 3; b++) {
-        const by = h * (0.12 + hash(i * 3 + b, 34) * 0.4);
-        const dir = hash(i * 3 + b, 35) > 0.5 ? 1 : -1;
-        const bl = 60 + hash(i * 3 + b, 36) * 130;
-        x.save();
-        x.translate(tx + lean * (1 - by / h), by);
-        x.rotate(dir * (0.5 + hash(i * 3 + b, 37) * 0.4));
+      const tw = 36 + hash(i, 32) * 44;
+      const lean = (hash(i, 33) - 0.5) * 65;
+
+      const renderTrunkAt = (atX: number) => {
+        // Trunk body with organic tapering and flared base
         x.beginPath();
-        x.moveTo(0, -7);
-        x.quadraticCurveTo(bl * 0.5, -10, bl, 4);
-        x.lineTo(bl, 12);
-        x.quadraticCurveTo(bl * 0.4, 6, 0, 7);
+        x.moveTo(atX - tw * 0.7, h);
+        x.quadraticCurveTo(atX - tw * 0.45 + lean * 0.3, h * 0.5, atX - tw * 0.32 + lean, -40);
+        x.lineTo(atX + tw * 0.32 + lean, -40);
+        x.quadraticCurveTo(atX + tw * 0.45 + lean * 0.3, h * 0.5, atX + tw * 0.75, h);
         x.closePath();
         x.fill();
-        x.restore();
-      }
-      // canopy blobs near top
-      for (let cn = 0; cn < 5; cn++) {
-        const cx2 = tx + lean + (hash(i * 5 + cn, 38) - 0.5) * 420;
-        const cy2 = hash(i * 5 + cn, 39) * h * 0.16 - 20;
-        const cr = 90 + hash(i * 5 + cn, 40) * 150;
-        x.beginPath();
-        x.arc(cx2, cy2, cr, 0, TAU);
-        x.fill();
-      }
+
+        // Heavy spreading branch boughs
+        for (let b = 0; b < 3; b++) {
+          const by = h * (0.12 + hash(i * 3 + b, 34) * 0.38);
+          const dir = hash(i * 3 + b, 35) > 0.5 ? 1 : -1;
+          const bl = 70 + hash(i * 3 + b, 36) * 140;
+          x.save();
+          x.translate(atX + lean * (1 - by / h), by);
+          x.rotate(dir * (0.45 + hash(i * 3 + b, 37) * 0.38));
+          x.beginPath();
+          x.moveTo(0, -9);
+          x.quadraticCurveTo(bl * 0.5, -12, bl, 4);
+          x.lineTo(bl, 13);
+          x.quadraticCurveTo(bl * 0.4, 7, 0, 9);
+          x.closePath();
+          x.fill();
+          x.restore();
+        }
+
+        // Hanging moss / lichen streamers from limbs
+        for (let m = 0; m < 5; m++) {
+          const my = h * (0.18 + hash(i * 7 + m, 601) * 0.3);
+          const mx = atX + lean * (1 - my / h) + (hash(i * 7 + m, 602) - 0.5) * 160;
+          const mLen = 28 + hash(i * 7 + m, 603) * 65;
+          const sway = (hash(i * 7 + m, 604) - 0.5) * 14;
+          x.lineWidth = 2.2;
+          x.beginPath();
+          x.moveTo(mx, my);
+          x.quadraticCurveTo(mx + sway * 1.5, my + mLen * 0.5, mx + sway, my + mLen);
+          x.stroke();
+          // Moss tufts along streamer
+          x.beginPath();
+          x.ellipse(mx + sway * 0.6, my + mLen * 0.4, 3, 6, 0.2, 0, TAU);
+          x.ellipse(mx + sway, my + mLen, 2.5, 5, 0.1, 0, TAU);
+          x.fill();
+        }
+
+        // Overhead canopy: Organic ruffled leafy masses (replaces smooth circles)
+        for (let cn = 0; cn < 7; cn++) {
+          const cx2 = atX + lean + (hash(i * 7 + cn, 38) - 0.5) * 440;
+          const cy2 = hash(i * 7 + cn, 39) * h * 0.14 - 15;
+          const cr = 85 + hash(i * 7 + cn, 40) * 140;
+
+          const points = 12;
+          x.beginPath();
+          for (let p = 0; p <= points; p++) {
+            const idx = p % points;
+            const angle = (idx / points) * TAU;
+            const r = cr * (0.78 + hash(i * 53 + cn * 17 + idx, 605) * 0.42);
+            const px = cx2 + Math.cos(angle) * r;
+            const py = cy2 + Math.sin(angle) * r * 0.85;
+            if (p === 0) {
+              x.moveTo(px, py);
+            } else {
+              const prevAngle = ((idx - 0.5) / points) * TAU;
+              const ccr = cr * (0.86 + hash(i * 41 + cn * 19 + idx, 606) * 0.3);
+              x.quadraticCurveTo(cx2 + Math.cos(prevAngle) * ccr, cy2 + Math.sin(prevAngle) * ccr * 0.85, px, py);
+            }
+          }
+          x.closePath();
+          x.fill();
+        }
+      };
+
+      renderTrunkAt(tx);
+      if (tx - 300 < 0) renderTrunkAt(tx + w);
+      if (tx + 300 > w) renderTrunkAt(tx - w);
     }
   }
+
 
   private fgLeafCluster(): HTMLCanvasElement {
     const [raw, rx] = makeCanvas(480, 480);
