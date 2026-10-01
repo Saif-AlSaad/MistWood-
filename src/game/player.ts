@@ -4,10 +4,10 @@
 import type { Palette } from "./types";
 import { rgb, clamp, lerp, TAU } from "./types";
 
-const GRAVITY = 2520;
-const JUMP_V = 975;
-const DBL_V = 880;
-const MAX_FALL = 1650;
+const GRAVITY = 2100;
+const JUMP_V = 720;
+const DBL_V = 620;
+const MAX_FALL = 1500;
 
 type PlayerEvent = "jump" | "dbl" | "land";
 
@@ -56,7 +56,7 @@ export class Player {
   }
 
   releaseJump(): void {
-    if (!this.dead && this.vy < 0) this.vy *= 0.45;
+    if (!this.dead && this.vy > 0) this.vy *= 0.45;
   }
 
   slideImpulse(): void {
@@ -90,7 +90,7 @@ export class Player {
     // buffered jump / coyote jump / double jump
     if (this.buf > 0) {
       if (this.grounded || this.coyote > 0) {
-        this.vy = -JUMP_V;
+        this.vy = JUMP_V;
         this.grounded = false;
         this.coyote = 0;
         this.buf = 0;
@@ -98,7 +98,7 @@ export class Player {
         this.stretch = 1;
         this.onEvent("jump");
       } else if (this.jumps < 2) {
-        this.vy = -DBL_V;
+        this.vy = DBL_V;
         this.buf = 0;
         this.jumps = 2;
         this.stretch = 0.8;
@@ -106,24 +106,25 @@ export class Player {
       }
     }
 
-    const g = GRAVITY * (this.fastFall ? 2.5 : 1);
-    this.vy = Math.min(this.vy + g * dt, MAX_FALL);
-    this.py += this.vy * dt;
+    if (!this.grounded) {
+      const g = GRAVITY * (this.fastFall ? 2.4 : 1);
+      this.vy = Math.max(this.vy - g * dt, -MAX_FALL);
+      this.py += this.vy * dt;
 
-    if (this.py <= 0) {
-      if (!this.grounded && this.vy > 0) {
+      if (this.py <= 0) {
+        this.py = 0;
+        this.vy = 0;
+        this.grounded = true;
+        this.fastFall = false;
+        this.jumps = 0;
+        this.coyote = 0.09;
         this.squash = 1;
         this.onEvent("land");
       }
+    } else {
       this.py = 0;
       this.vy = 0;
-      this.grounded = true;
-      this.fastFall = false;
-      this.jumps = 0;
-      this.coyote = 0.09;
     }
-    // moving above ground means we left the floor
-    if (this.py > 0.5) this.grounded = false;
 
     this.sliding = ((slideHeld && this.grounded) || this.slideTimer > 0) && !this.dead;
 
@@ -172,7 +173,7 @@ export class Player {
 
     ctx.save();
     ctx.translate(x, gy - this.py);
-    ctx.rotate(clamp(this.vy * 0.00024, -0.13, 0.3));
+    ctx.rotate(clamp(-this.vy * 0.00024, -0.18, 0.25));
 
     let sx = k * (1 + this.squash * 0.26 - this.stretch * 0.08);
     let sy = k * (1 - this.squash * 0.22 + this.stretch * 0.13);

@@ -60,6 +60,7 @@ export class Engine {
   private trailTimer = 0;
   private reduced = false;
   private disposed = false;
+  private startGraceTime = 0;
 
   constructor(canvas: HTMLCanvasElement, cb: EngineCallbacks) {
     this.canvas = canvas;
@@ -124,6 +125,10 @@ export class Engine {
     this.lastSeg = 0;
     this.timeScale = 1;
     this.deadReal = 0;
+    this.slideHeld = false;
+    this.slideImpulseT = 0;
+    this.ptrDown = null;
+    this.startGraceTime = performance.now() + 180;
     this.setState("playing");
   }
 
@@ -189,6 +194,7 @@ export class Engine {
       return;
     }
     if (this.state !== "playing") return;
+    if (performance.now() < this.startGraceTime) return;
 
     if (jumpKey) {
       this.audio.ensure();
@@ -212,6 +218,7 @@ export class Engine {
 
   private onPointerDown = (e: PointerEvent): void => {
     if (this.state !== "playing") return;
+    if (performance.now() < this.startGraceTime) return;
     e.preventDefault();
     this.audio.ensure();
     this.ptrDown = { y: e.clientY, t: performance.now() };

@@ -92,6 +92,7 @@ export default function MistwoodGame() {
       if (!eng) return;
       if (state === "menu" || state === "over") {
         e.preventDefault();
+        e.stopPropagation();
         eng.start();
       }
     };
