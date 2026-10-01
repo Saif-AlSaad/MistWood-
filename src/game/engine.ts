@@ -4,7 +4,7 @@ import { AudioEngine } from "./audio";
 import { Particles } from "./particles";
 import { Player } from "./player";
 import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
-import type { Bloom, Fly, GameState, Obstacle, ObstacleKind, Stats } from "./types";
+import type { Bloom, Fly, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
 import { clamp, rand, rgb } from "./types";
 
 interface EngineCallbacks {
@@ -13,6 +13,8 @@ interface EngineCallbacks {
   onToast: (id: number, name: string, line: string) => void;
   onFirstJump: () => void;
   onMuted: (m: boolean) => void;
+  onHUD?: (hud: HUDData) => void;
+  onNearMiss?: (count: number) => void;
 }
 
 const BEST_KEY = "mistwood_best";
@@ -61,6 +63,9 @@ export class Engine {
   private reduced = false;
   private disposed = false;
   private startGraceTime = 0;
+  private nearMisses = 0;
+  private slowMoTimer = 0;
+  private hudTimer = 0;
 
   constructor(canvas: HTMLCanvasElement, cb: EngineCallbacks) {
     this.canvas = canvas;
@@ -120,6 +125,9 @@ export class Engine {
     this.dist = 0;
     this.speed = 340;
     this.fliesN = 0;
+    this.nearMisses = 0;
+    this.slowMoTimer = 0;
+    this.hudTimer = 0;
     this.lastPatternEnd = 600;
     this.nextBloomAt = rand(380, 620) * 16;
     this.lastSeg = 0;
@@ -130,6 +138,33 @@ export class Engine {
     this.ptrDown = null;
     this.startGraceTime = performance.now() + 180;
     this.setState("playing");
+  }
+
+  jump(): void {
+    if (this.state !== "playing") return;
+    if (performance.now() < this.startGraceTime) return;
+    this.audio.ensure();
+    this.player.pressJump();
+    if (!this.hasJumped) {
+      this.hasJumped = true;
+      this.cb.onFirstJump();
+    }
+  }
+
+  releaseJump(): void {
+    this.player.releaseJump();
+  }
+
+  slideStart(): void {
+    if (this.state !== "playing") return;
+    this.slideHeld = true;
+    this.slideImpulseT = 0.55;
+    if (!this.player.grounded) this.player.fastFall = true;
+    this.player.slideImpulse();
+  }
+
+  slideEnd(): void {
+    this.slideHeld = false;
   }
 
   toMenu(): void {
@@ -269,7 +304,8 @@ export class Engine {
     } else if (e === "dbl") {
       this.audio.dbl();
       this.particles.dust(x, gy - this.player.py, 5);
-      this.particles.sparks(x, gy - this.player.py - 20, 5);
+      this.particles.sparks(x, gy - this.player.py - 20, 6);
+      this.particles.ring(x, gy - this.player.py - 4, 26);
     } else {
       this.audio.land();
       this.particles.dust(x - 6, gy, 8, -this.speed * 0.12);
@@ -324,10 +360,11 @@ export class Engine {
       }
     }
 
+    const speedRatio = Math.max(1, this.speed / 340);
     let px = startX;
     let firstOb: Obstacle | null = null;
     for (let i = 0; i < chosen.kinds.length; i++) {
-      px += chosen.gap[i];
+      px += chosen.gap[i] * speedRatio;
       const ob = makeObstacle(chosen.kinds[i], px);
       this.obstacles.push(ob);
       if (!firstOb) firstOb = ob;
@@ -378,6 +415,14 @@ export class Engine {
     const playing = this.state === "playing";
     const dying = this.state === "dying";
 
+    // slow-mo recovery for near misses
+    if (this.slowMoTimer > 0 && !dying) {
+      this.slowMoTimer -= dt / Math.max(0.1, this.timeScale);
+      if (this.slowMoTimer <= 0) {
+        this.timeScale = 1;
+      }
+    }
+
     // phase & palette
     const phase =
       this.state === "menu" || this.state === "over"
@@ -406,6 +451,7 @@ export class Engine {
           flies: this.fliesN,
           best: this.best,
           newBest,
+          nearMisses: this.nearMisses,
         });
       }
     }
@@ -426,6 +472,24 @@ export class Engine {
         this.cb.onToast(++this.toastId, s.name, line);
       }
 
+      // HUD updates emitted to React overlay at 20fps
+      this.hudTimer -= dt;
+      if (this.hudTimer <= 0) {
+        this.hudTimer = 0.05;
+        const segIdx = Math.floor(this.dist / 600) % SEGMENTS.length;
+        const nextSegIdx = (segIdx + 1) % SEGMENTS.length;
+        this.cb.onHUD?.({
+          dist: Math.floor(this.dist),
+          flies: this.fliesN,
+          speed: Math.round(this.speed),
+          ghostT: Math.max(0, this.player.ghostT),
+          biomeName: SEGMENTS[segIdx].name,
+          biomeNext: SEGMENTS[nextSegIdx].name,
+          biomeProgress: (this.dist % 600) / 600,
+          nearMissCount: this.nearMisses,
+        });
+      }
+
       // spawn ahead
       if (this.lastPatternEnd < this.scroll + this.w + 260) this.spawnPattern();
 
@@ -436,15 +500,16 @@ export class Engine {
         this.speed / 360,
       );
 
-      // footsteps / slide dust
+      // footsteps / slide dust / streak
       if (this.player.stepPulse()) {
         this.particles.dust(this.foxX - 14 * this.foxScale, this.groundY, 1);
       }
       if (this.player.sliding) {
         this.trailTimer -= dt;
         if (this.trailTimer <= 0) {
-          this.trailTimer = 0.05;
+          this.trailTimer = 0.04;
           this.particles.dust(this.foxX - 20, this.groundY, 2);
+          this.particles.streak(this.foxX - 16, this.groundY - 12, this.speed * 0.14);
         }
       } else if (this.player.ghostT > 0) {
         this.trailTimer -= dt;
@@ -510,6 +575,22 @@ export class Engine {
       ) {
         this.die();
         return;
+      }
+
+      // near miss detection: close horizontal pass with tight vertical clearance
+      if (!ob.nearMissed && hb[0] < b[2] && hb[2] > b[0] && this.player.ghostT <= 0) {
+        const isLeapingOver = b[1] - hb[3] >= 0 && b[1] - hb[3] < 24;
+        const isDuckingUnder = hb[1] - b[3] >= 0 && hb[1] - b[3] < 22;
+        if (isLeapingOver || isDuckingUnder) {
+          ob.nearMissed = true;
+          this.nearMisses++;
+          this.audio.nearMiss();
+          this.particles.sparks(fx, hb[3], 9);
+          this.slowMoTimer = 0.12;
+          this.timeScale = 0.55;
+          this.cb.onNearMiss?.(this.nearMisses);
+          this.fliesN++;
+        }
       }
     }
 
@@ -645,46 +726,5 @@ export class Engine {
     }
   }
 
-  private renderHUD(ctx: CanvasRenderingContext2D): void {
-    const pal = this.world.pal;
-    const fs = this.w < 640 ? 24 : 30;
-    ctx.save();
-    ctx.textBaseline = "alphabetic";
-
-    // distance
-    ctx.font = `${fs}px Marcellus, Georgia, serif`;
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillText(`${Math.floor(this.dist)} m`, 27, 52);
-    ctx.fillStyle = "rgba(255,251,240,0.94)";
-    ctx.fillText(`${Math.floor(this.dist)} m`, 25, 50);
-
-    // fireflies collected
-    const fy = 80;
-    ctx.fillStyle = rgb(pal.accent, 0.85);
-    ctx.beginPath();
-    ctx.arc(32, fy - 5, 3.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = rgb(pal.accent, 0.2);
-    ctx.beginPath();
-    ctx.arc(32, fy - 5, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = `300 ${Math.round(fs * 0.62)}px Outfit, sans-serif`;
-    ctx.fillStyle = "rgba(255,251,240,0.85)";
-    ctx.fillText(`× ${this.fliesN}`, 46, fy + 1);
-
-    // ghost timer bar
-    if (this.player.ghostT > 0) {
-      const bw = 120;
-      const fr2 = clamp(this.player.ghostT / 4.2, 0, 1);
-      ctx.fillStyle = "rgba(255,255,255,0.14)";
-      ctx.beginPath();
-      ctx.roundRect(25, 94, bw, 4, 2);
-      ctx.fill();
-      ctx.fillStyle = rgb(pal.accent, 0.85);
-      ctx.beginPath();
-      ctx.roundRect(25, 94, bw * fr2, 4, 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
+  private renderHUD(_ctx: CanvasRenderingContext2D): void {}
 }

@@ -8,6 +8,8 @@ enum PT {
   Spark,
   Spore,
   Leaf,
+  Ring,
+  Streak,
 }
 
 interface Particle {
@@ -23,7 +25,7 @@ interface Particle {
   type: PT;
 }
 
-const MAX = 340;
+const MAX = 420;
 
 export class Particles {
   private pool: Particle[] = [];
@@ -111,6 +113,36 @@ export class Particles {
     });
   }
 
+  ring(x: number, y: number, size = 26): void {
+    this.add({
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life: 0.38,
+      max: 0,
+      size,
+      rot: 0,
+      vr: 0,
+      type: PT.Ring,
+    });
+  }
+
+  streak(x: number, y: number, len = 40): void {
+    this.add({
+      x,
+      y,
+      vx: -len * 2.2,
+      vy: rand(-4, 4),
+      life: 0.28,
+      max: 0,
+      size: len,
+      rot: 0,
+      vr: 0,
+      type: PT.Streak,
+    });
+  }
+
   update(dt: number, wind: number): void {
     const p = this.pool;
     for (let i = p.length - 1; i >= 0; i--) {
@@ -126,6 +158,11 @@ export class Particles {
         o.vx += Math.sin(o.max * 3.4 + o.rot) * 26 * dt;
         o.rot += o.vr * dt;
         o.x += (o.vx + wind * 0.6) * dt;
+        o.y += o.vy * dt;
+      } else if (o.type === PT.Ring) {
+        // stationary expanding ring
+      } else if (o.type === PT.Streak) {
+        o.x += o.vx * dt;
         o.y += o.vy * dt;
       } else {
         o.vy += (o.type === PT.Dust ? -26 : 130) * dt;
@@ -160,18 +197,34 @@ export class Particles {
     }
   }
 
-  /** additive pass — sparks + spores */
+  /** additive pass — sparks + spores + rings + streaks */
   renderGlow(ctx: CanvasRenderingContext2D, pal: Palette): void {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     for (const o of this.pool) {
-      if (o.type !== PT.Spark && o.type !== PT.Spore) continue;
+      if (o.type === PT.Dust || o.type === PT.Leaf) continue;
       const a = Math.min(1, o.life * 2.4);
       if (o.type === PT.Spark) {
         ctx.fillStyle = rgb(pal.accent, a * 0.9);
         ctx.beginPath();
         ctx.arc(o.x, o.y, o.size, 0, TAU);
         ctx.fill();
+      } else if (o.type === PT.Ring) {
+        const ringAlpha = Math.min(1, (o.life / 0.38) * 1.4);
+        const r = o.size + o.max * 65;
+        ctx.strokeStyle = rgb(pal.accent, ringAlpha * 0.85);
+        ctx.lineWidth = Math.max(1, 3 * (o.life / 0.38));
+        ctx.beginPath();
+        ctx.ellipse(o.x, o.y, r * 1.15, r * 0.4, 0, 0, TAU);
+        ctx.stroke();
+      } else if (o.type === PT.Streak) {
+        const streakAlpha = Math.min(1, (o.life / 0.28) * 1.3);
+        ctx.strokeStyle = rgb(pal.accent, streakAlpha * 0.4);
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(o.x + o.size * (o.life / 0.28), o.y);
+        ctx.stroke();
       } else {
         ctx.fillStyle = rgb(pal.accent, a * 0.16);
         ctx.beginPath();

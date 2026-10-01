@@ -24,6 +24,18 @@ export interface Stats {
   flies: number;
   best: number;
   newBest: boolean;
+  nearMisses: number;
+}
+
+export interface HUDData {
+  dist: number;
+  flies: number;
+  speed: number;
+  ghostT: number;
+  biomeName: string;
+  biomeNext: string;
+  biomeProgress: number;
+  nearMissCount: number;
 }
 
 export type GameState =
@@ -51,6 +63,7 @@ export interface Obstacle {
   seed: number;
   /** precomputed polygon points for rocks (rel to base center) */
   verts?: number[];
+  nearMissed?: boolean;
 }
 
 export interface Fly {

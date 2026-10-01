@@ -197,6 +197,12 @@ export class AudioEngine {
     );
   }
 
+  nearMiss(): void {
+    const t = this.t;
+    this.tone({ f0: 987, dur: 0.16, g: 0.12, at: t, type: "triangle" });
+    this.tone({ f0: 1318, dur: 0.22, g: 0.09, at: t + 0.05, type: "sine" });
+  }
+
   death(): void {
     this.tone({ f0: 165, f1: 36, dur: 0.65, g: 0.55 });
     this.noise({ dur: 0.45, f0: 520, f1: 70, type: "lowpass", g: 0.26 });

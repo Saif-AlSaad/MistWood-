@@ -4,19 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowBigDown,
   ArrowBigUp,
+  Compass,
   Leaf,
   MousePointerClick,
   Pause,
   Play,
   RotateCcw,
+  Shield,
   Sparkles,
   Trophy,
   Trees,
   Volume2,
   VolumeX,
+  Zap,
 } from "lucide-react";
 import { Engine } from "../game/engine";
-import type { GameState, Stats } from "../game/types";
+import type { GameState, HUDData, Stats } from "../game/types";
 
 const DEATH_LINES = [
   "The forest keeps its secrets.",
@@ -34,6 +37,8 @@ export default function MistwoodGame() {
   const [toast, setToast] = useState<{ id: number; name: string; line: string } | null>(null);
   const [hintOn, setHintOn] = useState(false);
   const [best, setBest] = useState(0);
+  const [hud, setHud] = useState<HUDData | null>(null);
+  const [nearMissToast, setNearMissToast] = useState<{ id: number; count: number } | null>(null);
 
   const isTouch = useMemo(
     () =>
@@ -63,6 +68,11 @@ export default function MistwoodGame() {
       onToast: (id, name, line) => setToast({ id, name, line }),
       onFirstJump: () => setHintOn(false),
       onMuted: (m) => setMuted(m),
+      onHUD: (h) => setHud(h),
+      onNearMiss: (count) => {
+        setNearMissToast({ id: Date.now(), count });
+        setTimeout(() => setNearMissToast(null), 1200);
+      },
     });
     engineRef.current = eng;
     let alive = true;
@@ -100,7 +110,11 @@ export default function MistwoodGame() {
     return () => window.removeEventListener("keydown", onKey);
   }, [state]);
 
-  const start = useCallback(() => engineRef.current?.start(), []);
+  const start = useCallback(() => {
+    setHud(null);
+    setNearMissToast(null);
+    engineRef.current?.start();
+  }, []);
   const resume = useCallback(() => engineRef.current?.togglePause(), []);
   const toMenu = useCallback(() => engineRef.current?.toMenu(), []);
   const toggleMute = useCallback(() => {
@@ -117,6 +131,121 @@ export default function MistwoodGame() {
       {/* vignette-safe readable gradient for menus */}
       {(state === "menu" || state === "over" || state === "paused") && (
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/55" />
+      )}
+
+      {/* ---------- glassmorphic in-game HUD ---------- */}
+      {playing && (
+        <>
+          {/* Top-left: Distance, Fireflies, Close Calls */}
+          <div className="pointer-events-none absolute left-4 top-4 z-40 flex flex-col gap-1.5 md:left-6 md:top-6">
+            <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-4 py-2 text-white/90 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-md">
+              <span className="font-display text-2xl tracking-wider text-amber-50 md:text-3xl">
+                {hud?.dist ?? 0}
+              </span>
+              <span className="text-[11px] font-light tracking-widest text-amber-200/70 uppercase">
+                m
+              </span>
+              <span className="mx-0.5 h-3.5 w-px bg-white/20" />
+              <div className="flex items-center gap-1.5 text-amber-300">
+                <Sparkles className="h-3.5 w-3.5 fill-amber-300/30" />
+                <span className="font-sans text-xs font-medium tracking-wide text-amber-100">
+                  {hud?.flies ?? 0}
+                </span>
+              </div>
+              {hud && hud.nearMissCount > 0 && (
+                <>
+                  <span className="mx-0.5 h-3.5 w-px bg-white/20" />
+                  <div className="flex items-center gap-1 text-emerald-300">
+                    <Zap className="h-3.5 w-3.5 fill-emerald-300/30" />
+                    <span className="text-[11px] font-medium text-emerald-200">
+                      {hud.nearMissCount}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Top-center: Biome Journey Progress Tracker */}
+          <div className="pointer-events-none absolute left-1/2 top-4 z-40 flex -translate-x-1/2 flex-col items-center gap-1.5 md:top-6">
+            <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/35 px-4 py-1.5 backdrop-blur-md shadow-md">
+              <Compass className="h-3.5 w-3.5 text-amber-200/80" />
+              <span className="text-[11px] font-medium tracking-[0.25em] text-white/90 uppercase">
+                {hud?.biomeName ?? "Golden Dawn"}
+              </span>
+              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/15 md:w-28">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-amber-100 shadow-[0_0_10px_rgba(251,191,36,0.6)] transition-all duration-300"
+                  style={{ width: `${Math.round((hud?.biomeProgress ?? 0) * 100)}%` }}
+                />
+              </div>
+              <span className="hidden text-[10px] font-light tracking-wider text-white/45 uppercase sm:inline">
+                ➔ {hud?.biomeNext ?? "Quiet Midday"}
+              </span>
+            </div>
+
+            {/* Spirit veil / ghost bloom active indicator */}
+            {hud && hud.ghostT > 0 && (
+              <div className="animate-pulse flex items-center gap-1.5 rounded-full border border-cyan-400/40 bg-cyan-950/60 px-3.5 py-1 text-[11px] font-medium tracking-widest text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,0.35)] backdrop-blur-md">
+                <Shield className="h-3.5 w-3.5 text-cyan-300" />
+                <span>Spirit Veil · {hud.ghostT.toFixed(1)}s</span>
+              </div>
+            )}
+
+            {/* Near miss popup toast */}
+            {nearMissToast && (
+              <div className="animate-nearmiss flex items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-500/25 px-3.5 py-1 text-[11px] font-medium tracking-wider text-amber-100 shadow-[0_0_25px_rgba(251,191,36,0.45)] backdrop-blur-md">
+                <Zap className="h-3.5 w-3.5 fill-amber-300/30 text-amber-300" />
+                <span>Close Call! +1 Firefly</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ---------- on-screen mobile touch controls ---------- */}
+      {playing && isTouch && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-40 flex items-center justify-between px-6 md:hidden">
+          {/* Slide / Duck Button (Left thumb) */}
+          <button
+            type="button"
+            aria-label="Slide"
+            onTouchStart={(e) => {
+              e.preventDefault();
+              engineRef.current?.slideStart();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              engineRef.current?.slideEnd();
+            }}
+            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-full border border-white/20 bg-black/45 text-amber-200/90 shadow-[0_8px_30px_rgba(0,0,0,0.5)] backdrop-blur-lg transition-transform active:scale-90 active:bg-amber-500/20"
+          >
+            <ArrowBigDown className="h-8 w-8" />
+            <span className="text-[10px] font-medium tracking-widest uppercase text-white/70">
+              Slide
+            </span>
+          </button>
+
+          {/* Jump / Leap Button (Right thumb) */}
+          <button
+            type="button"
+            aria-label="Jump"
+            onTouchStart={(e) => {
+              e.preventDefault();
+              engineRef.current?.jump();
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              engineRef.current?.releaseJump();
+            }}
+            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-full border border-amber-300/40 bg-amber-400/15 text-amber-100 shadow-[0_8px_30px_rgba(251,191,36,0.25)] backdrop-blur-lg transition-transform active:scale-90 active:bg-amber-300/30"
+          >
+            <ArrowBigUp className="h-8 w-8" />
+            <span className="text-[10px] font-medium tracking-widest uppercase text-amber-200">
+              Jump
+            </span>
+          </button>
+        </div>
       )}
 
       {/* ---------- top-right utility buttons ---------- */}
@@ -297,11 +426,17 @@ export default function MistwoodGame() {
             <span className="ml-2 text-3xl text-white/50 md:text-4xl">m</span>
           </div>
 
-          <div className="fade-up fade-up-2 mt-7 flex items-center gap-3">
+          <div className="fade-up fade-up-2 mt-7 flex flex-wrap items-center justify-center gap-3">
             <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[12px] font-light tracking-widest text-white/70 backdrop-blur-sm">
               <Sparkles className="h-3.5 w-3.5 text-amber-200/80" />
               {stats.flies} fireflies
             </span>
+            {stats.nearMisses > 0 && (
+              <span className="flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-950/25 px-4 py-2 text-[12px] font-light tracking-widest text-emerald-200 backdrop-blur-sm">
+                <Zap className="h-3.5 w-3.5 text-emerald-300" />
+                {stats.nearMisses} Close {stats.nearMisses === 1 ? "Call" : "Calls"}
+              </span>
+            )}
             <span
               className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-light tracking-widest backdrop-blur-sm ${
                 stats.newBest
@@ -330,6 +465,10 @@ export default function MistwoodGame() {
               The grove
             </button>
           </div>
+
+          <p className="fade-up fade-up-4 mt-6 text-[11px] font-light tracking-[0.3em] text-white/40 uppercase">
+            Space or Tap to run again
+          </p>
         </div>
       )}
     </div>
