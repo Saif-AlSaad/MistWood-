@@ -5,14 +5,13 @@ import { Check } from "lucide-react";
 import { Engine } from "../game/engine";
 import {
   DEFAULT_SETTINGS,
-  FOX_PELTS,
   SETTINGS_STORAGE_KEY,
-  type FoxPeltId,
   type GameSettings,
   type GameState,
   type HUDData,
   type Stats,
 } from "../game/types";
+import { ANIMALS, mapLegacyPeltId, type AnimalId } from "../game/animals";
 import { GameHUD } from "./ui/GameHUD";
 import { MainMenu } from "./ui/MainMenu";
 import { PauseMenu } from "./ui/PauseMenu";
@@ -43,30 +42,38 @@ export default function MistwoodGame() {
     return DEFAULT_SETTINGS;
   });
 
-  // Progression & Pelts
+  // Progression & Animals
   const [totalFlies, setTotalFlies] = useState<number>(() => {
     if (typeof window === "undefined") return 0;
     const val = localStorage.getItem("mistwood_total_flies");
     return val ? parseInt(val, 10) || 0 : 0;
   });
 
-  const [unlockedPelts, setUnlockedPelts] = useState<FoxPeltId[]>(() => {
-    if (typeof window === "undefined") return ["ember"];
+  const [unlockedAnimals, setUnlockedAnimals] = useState<AnimalId[]>(() => {
+    if (typeof window === "undefined") return ["fox"];
     try {
-      const saved = localStorage.getItem("mistwood_unlocked_pelts");
+      const saved =
+        localStorage.getItem("mistwood_unlocked_animals") ||
+        localStorage.getItem("mistwood_unlocked_pelts");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const mapped = parsed.map((p) => mapLegacyPeltId(p));
+          if (!mapped.includes("fox")) mapped.push("fox");
+          return mapped;
+        }
       }
     } catch {}
-    return ["ember"];
+    return ["fox"];
   });
 
-  const [activePeltId, setActivePeltId] = useState<FoxPeltId>(() => {
-    if (typeof window === "undefined") return "ember";
-    const saved = localStorage.getItem("mistwood_active_pelt");
-    if (saved && saved in FOX_PELTS) return saved as FoxPeltId;
-    return "ember";
+  const [activeAnimalId, setActiveAnimalId] = useState<AnimalId>(() => {
+    if (typeof window === "undefined") return "fox";
+    const saved =
+      localStorage.getItem("mistwood_active_animal") ||
+      localStorage.getItem("mistwood_active_pelt");
+    if (saved) return mapLegacyPeltId(saved);
+    return "fox";
   });
 
   // Modal Overlays
@@ -81,7 +88,7 @@ export default function MistwoodGame() {
     [],
   );
 
-  const activePelt = FOX_PELTS[activePeltId] || FOX_PELTS.ember;
+  const activeAnimal = ANIMALS[activeAnimalId] || ANIMALS.fox;
 
   // Sound triggers
   const playHover = useCallback(() => {
@@ -138,7 +145,7 @@ export default function MistwoodGame() {
       },
     });
 
-    eng.setPelt(FOX_PELTS[activePeltId] || FOX_PELTS.ember);
+    eng.setAnimal(ANIMALS[activeAnimalId] || ANIMALS.fox);
     eng.applySettings(settings);
     engineRef.current = eng;
 
@@ -154,12 +161,12 @@ export default function MistwoodGame() {
     };
   }, []);
 
-  // Sync pelt updates to engine
+  // Sync animal updates to engine
   useEffect(() => {
-    if (engineRef.current && activePeltId in FOX_PELTS) {
-      engineRef.current.setPelt(FOX_PELTS[activePeltId]);
+    if (engineRef.current && activeAnimalId in ANIMALS) {
+      engineRef.current.setAnimal(ANIMALS[activeAnimalId]);
     }
-  }, [activePeltId]);
+  }, [activeAnimalId]);
 
   // Space/Enter starts a run from menus (unless modal is open)
   useEffect(() => {
@@ -210,47 +217,48 @@ export default function MistwoodGame() {
     if (eng) eng.setMuted(!eng.muted);
   }, []);
 
-  const equipPelt = useCallback((peltId: FoxPeltId) => {
-    setActivePeltId(peltId);
+  const equipAnimal = useCallback((animalId: AnimalId) => {
+    setActiveAnimalId(animalId);
     try {
-      localStorage.setItem("mistwood_active_pelt", peltId);
+      localStorage.setItem("mistwood_active_animal", animalId);
+      localStorage.setItem("mistwood_active_pelt", animalId);
     } catch {}
-    if (engineRef.current && peltId in FOX_PELTS) {
-      engineRef.current.setPelt(FOX_PELTS[peltId]);
+    if (engineRef.current && animalId in ANIMALS) {
+      engineRef.current.setAnimal(ANIMALS[animalId]);
     }
   }, []);
 
-  const unlockPelt = useCallback(
-    (peltId: FoxPeltId) => {
-      const pelt = FOX_PELTS[peltId];
-      if (!pelt) return;
-      if (unlockedPelts.includes(peltId)) {
-        equipPelt(peltId);
+  const unlockAnimal = useCallback(
+    (animalId: AnimalId) => {
+      const animal = ANIMALS[animalId];
+      if (!animal) return;
+      if (unlockedAnimals.includes(animalId)) {
+        equipAnimal(animalId);
         return;
       }
-      if (totalFlies < pelt.cost) return;
+      if (totalFlies < animal.cost) return;
 
-      const nextBalance = totalFlies - pelt.cost;
-      const nextUnlocked = [...unlockedPelts, peltId];
+      const nextBalance = totalFlies - animal.cost;
+      const nextUnlocked = [...unlockedAnimals, animalId];
 
       setTotalFlies(nextBalance);
-      setUnlockedPelts(nextUnlocked);
-      setActivePeltId(peltId);
+      setUnlockedAnimals(nextUnlocked);
+      setActiveAnimalId(animalId);
 
       try {
         localStorage.setItem("mistwood_total_flies", String(nextBalance));
         localStorage.setItem(
-          "mistwood_unlocked_pelts",
+          "mistwood_unlocked_animals",
           JSON.stringify(nextUnlocked),
         );
-        localStorage.setItem("mistwood_active_pelt", peltId);
+        localStorage.setItem("mistwood_active_animal", animalId);
       } catch {}
 
       if (engineRef.current) {
-        engineRef.current.setPelt(pelt);
+        engineRef.current.setAnimal(animal);
       }
     },
-    [totalFlies, unlockedPelts, equipPelt],
+    [totalFlies, unlockedAnimals, equipAnimal],
   );
 
   const handleShare = useCallback(() => {
@@ -318,7 +326,7 @@ export default function MistwoodGame() {
         <MainMenu
           best={best}
           totalFlies={totalFlies}
-          activePelt={activePelt}
+          activeAnimal={activeAnimal}
           muted={muted}
           isTouch={isTouch}
           onStart={start}
@@ -355,14 +363,14 @@ export default function MistwoodGame() {
         />
       )}
 
-      {/* Garage / Pelt Customization Modal */}
+      {/* Garage / Animal Selection Modal */}
       {showGarage && (
         <Garage
-          activePeltId={activePeltId}
-          unlockedPelts={unlockedPelts}
+          activePeltId={activeAnimalId}
+          unlockedPelts={unlockedAnimals}
           totalFlies={totalFlies}
-          onEquip={equipPelt}
-          onUnlock={unlockPelt}
+          onEquip={equipAnimal}
+          onUnlock={unlockAnimal}
           onClose={() => setShowGarage(false)}
           onHover={playHover}
           onClickSound={playClick}

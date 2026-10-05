@@ -6,6 +6,8 @@ import { Player } from "./player";
 import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
 import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
 import { DEFAULT_SETTINGS, FOX_PELTS, clamp, rand, speedToKmh } from "./types";
+import type { AnimalDefinition } from "./animals";
+import { ANIMALS, mapLegacyPeltId } from "./animals";
 
 interface EngineCallbacks {
   onState: (s: GameState) => void;
@@ -24,6 +26,7 @@ export class Engine {
   best = 0;
   muted = false;
   pelt: FoxPelt = FOX_PELTS.ember;
+  animal: AnimalDefinition = ANIMALS.fox;
   settings: GameSettings = DEFAULT_SETTINGS;
 
   private canvas: HTMLCanvasElement;
@@ -134,6 +137,15 @@ export class Engine {
 
   setPelt(pelt: FoxPelt): void {
     this.pelt = pelt;
+    const animalId = mapLegacyPeltId(pelt.id);
+    if (animalId in ANIMALS) {
+      this.setAnimal(ANIMALS[animalId]);
+    }
+  }
+
+  setAnimal(animal: AnimalDefinition): void {
+    this.animal = animal;
+    this.player.setAnimal(animal);
   }
 
   start(): void {
@@ -334,7 +346,9 @@ export class Engine {
     } else {
       this.audio.land();
       this.particles.dust(x - 6, gy, 8, -this.speed * 0.12);
-      if (!this.reduced && this.settings.screenShake) this.shake = Math.max(this.shake, 1.8);
+      if (!this.reduced && this.settings.screenShake) {
+        this.shake = Math.max(this.shake, this.animal.physics.landingShake * 1.5);
+      }
     }
   }
 
@@ -487,7 +501,9 @@ export class Engine {
     }
 
     if (playing) {
-      this.speed = 340 + Math.min(480, this.dist * 0.42);
+      const phys = this.animal.physics;
+      const targetSpeed = (340 + Math.min(480, this.dist * 0.42 * phys.acceleration)) * phys.maxSpeedMultiplier;
+      this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 2.5);
       if (this.speed > this.maxSpeedReached) {
         this.maxSpeedReached = Math.round(this.speed);
       }
@@ -557,7 +573,7 @@ export class Engine {
       this.player.update(
         dt,
         this.slideHeld || this.slideImpulseT > 0,
-        this.speed / 360,
+        this.speed,
       );
 
       // footsteps / slide dust / streak
@@ -783,7 +799,7 @@ export class Engine {
     this.world.renderFlora(ctx, w, gy, this.scroll, this.time);
 
     if (this.state !== "menu" && this.state !== "over") {
-      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale, this.pelt);
+      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale);
     }
 
     this.particles.renderFlat(ctx, pal);

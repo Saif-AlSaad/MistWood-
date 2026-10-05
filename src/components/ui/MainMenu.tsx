@@ -9,11 +9,13 @@ import {
   VolumeX,
 } from "lucide-react";
 import type { FoxPelt } from "../../game/types";
+import type { AnimalDefinition } from "../../game/animals";
 
 interface MainMenuProps {
   best: number;
   totalFlies: number;
-  activePelt: FoxPelt;
+  activePelt?: FoxPelt;
+  activeAnimal?: AnimalDefinition;
   muted: boolean;
   isTouch: boolean;
   onStart: () => void;
@@ -27,6 +29,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   best,
   totalFlies,
   activePelt,
+  activeAnimal,
   muted,
   isTouch,
   onStart,
@@ -35,6 +38,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onToggleMute,
   onHover,
 }) => {
+  const animalName = activeAnimal?.name || activePelt?.name || "Red Fox";
+  const animalColor = activeAnimal?.colors.accent || activePelt?.accentColor || "#ffd27a";
   return (
     <div className="absolute inset-0 z-20 flex flex-col items-center justify-between p-6 text-center select-none">
       {/* Top Bar Utilities */}
@@ -132,9 +137,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[11px] font-medium tracking-wider text-white/70 backdrop-blur-md">
             <span
               className="h-2 w-2 rounded-full"
-              style={{ background: activePelt.accentColor }}
+              style={{ background: animalColor }}
             />
-            <span>ATTUNED: {activePelt.name.toUpperCase()}</span>
+            <span>RUNNER: {animalName.toUpperCase()}</span>
           </div>
         </div>
       </div>
