@@ -214,19 +214,6 @@ export class Player {
       }
     }
 
-    ctx.save();
-    ctx.translate(x, gy - this.py);
-    ctx.rotate(this.currentLean);
-
-    // Squash & Stretch deformation
-    let sx = k * (1 + this.squash * 0.3 - this.stretch * 0.1);
-    let sy = k * (1 - this.squash * 0.28 + this.stretch * 0.15);
-    if (this.sliding) {
-      sx *= 1.2;
-      sy *= 0.52;
-    }
-    ctx.scale(sx, sy);
-    ctx.globalAlpha = (this.ghostT > 0 ? 0.72 : (id === "moon_fox" ? 0.95 : 1)) * fade;
 
     // Moon Fox Celestial Aura or Ghost Bloom
     if (this.ghostT > 0 || id === "moon_fox") {
