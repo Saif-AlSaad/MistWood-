@@ -4,8 +4,8 @@ import { AudioEngine } from "./audio";
 import { Particles } from "./particles";
 import { Player } from "./player";
 import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
-import type { Bloom, Fly, FoxPelt, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
-import { FOX_PELTS, clamp, rand, rgb } from "./types";
+import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
+import { DEFAULT_SETTINGS, FOX_PELTS, clamp, rand, speedToKmh } from "./types";
 
 interface EngineCallbacks {
   onState: (s: GameState) => void;
@@ -24,6 +24,7 @@ export class Engine {
   best = 0;
   muted = false;
   pelt: FoxPelt = FOX_PELTS.ember;
+  settings: GameSettings = DEFAULT_SETTINGS;
 
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -61,6 +62,9 @@ export class Engine {
   private toastId = 0;
   private leafTimer = 2;
   private trailTimer = 0;
+  private speedStreakTimer = 0;
+  private cameraZoom = 1;
+  private cameraY = 0;
   private reduced = false;
   private disposed = false;
   private startGraceTime = 0;
@@ -109,6 +113,18 @@ export class Engine {
     document.removeEventListener("visibilitychange", this.onVis);
   }
 
+  getAudio(): AudioEngine {
+    return this.audio;
+  }
+
+  applySettings(s: GameSettings): void {
+    this.settings = s;
+    this.reduced = s.reducedMotion;
+    this.audio.setMasterVolume(s.masterVolume);
+    this.audio.setSfxVolume(s.sfxVolume);
+    this.audio.setMusicVolume(s.musicVolume);
+  }
+
   /* ------------------------------------------------------------ */
 
   private setState(s: GameState): void {
@@ -131,6 +147,8 @@ export class Engine {
     this.dist = 0;
     this.speed = 340;
     this.maxSpeedReached = 340;
+    this.cameraZoom = 1;
+    this.cameraY = 0;
     this.fliesN = 0;
     this.nearMisses = 0;
     this.slowMoTimer = 0;
@@ -316,7 +334,7 @@ export class Engine {
     } else {
       this.audio.land();
       this.particles.dust(x - 6, gy, 8, -this.speed * 0.12);
-      if (!this.reduced) this.shake = Math.max(this.shake, 1.6);
+      if (!this.reduced && this.settings.screenShake) this.shake = Math.max(this.shake, 1.8);
     }
   }
 
@@ -461,6 +479,7 @@ export class Engine {
           newBest,
           nearMisses: this.nearMisses,
           maxSpeed: this.maxSpeedReached,
+          maxSpeedKmh: speedToKmh(this.maxSpeedReached),
           biomeName: SEGMENTS[segIdx].name,
           totalFlies: this.fliesN,
         });
@@ -468,10 +487,34 @@ export class Engine {
     }
 
     if (playing) {
-      this.speed = 340 + Math.min(470, this.dist * 0.42);
+      this.speed = 340 + Math.min(480, this.dist * 0.42);
       if (this.speed > this.maxSpeedReached) {
         this.maxSpeedReached = Math.round(this.speed);
       }
+      this.audio.setSpeed(this.speed);
+
+      // Dynamic racing camera FOV zoom pull & vertical tracking
+      const targetZoom = this.settings.speedEffects && !this.reduced
+        ? 1 - Math.min(0.065, (this.speed - 340) / 7200)
+        : 1;
+      this.cameraZoom += (targetZoom - this.cameraZoom) * dt * 3.5;
+
+      const targetCamY = !this.reduced ? this.player.py * 0.12 : 0;
+      this.cameraY += (targetCamY - this.cameraY) * dt * 7;
+
+      // High speed wind streaks
+      if (this.speed > 520 && this.settings.speedEffects) {
+        this.speedStreakTimer -= dt;
+        if (this.speedStreakTimer <= 0) {
+          this.speedStreakTimer = rand(0.04, 0.08);
+          this.particles.streak(
+            this.w + rand(10, 50),
+            rand(40, this.h * 0.8),
+            rand(60, 140) * (this.speed / 340),
+          );
+        }
+      }
+
       this.scroll += this.speed * dt;
       this.dist += (this.speed * dt) / 16;
       this.slideImpulseT -= dt;
@@ -496,6 +539,9 @@ export class Engine {
           dist: Math.floor(this.dist),
           flies: this.fliesN,
           speed: Math.round(this.speed),
+          speedKmh: speedToKmh(this.speed),
+          maxSpeed: this.maxSpeedReached,
+          maxSpeedKmh: speedToKmh(this.maxSpeedReached),
           ghostT: Math.max(0, this.player.ghostT),
           biomeName: SEGMENTS[segIdx].name,
           biomeNext: SEGMENTS[nextSegIdx].name,
@@ -663,7 +709,7 @@ export class Engine {
     const gy = this.groundY;
     this.particles.spores(this.foxX, gy - this.player.py - 26, 22, true);
     this.particles.dust(this.foxX, gy, 10);
-    if (!this.reduced) this.shake = 13;
+    if (!this.reduced && this.settings.screenShake) this.shake = 13;
   }
 
   /* ------------------------------------------------------------ */
@@ -678,8 +724,22 @@ export class Engine {
 
     const gy = this.groundY;
     const pal = this.world.pal;
-    const shakeX = this.shake > 0 ? rand(-this.shake, this.shake) : 0;
-    const shakeY = this.shake > 0 ? rand(-this.shake, this.shake) : 0;
+    const shakeX =
+      this.settings.screenShake && !this.reduced && this.shake > 0
+        ? rand(-this.shake, this.shake)
+        : 0;
+    const shakeY =
+      this.settings.screenShake && !this.reduced && this.shake > 0
+        ? rand(-this.shake, this.shake)
+        : 0;
+
+    // ---- dynamic camera transform (FOV zoom & vertical spring) ----
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    ctx.save();
+    ctx.translate(cx, cy + this.cameraY);
+    ctx.scale(this.cameraZoom, this.cameraZoom);
+    ctx.translate(-cx, -cy);
 
     // ---- backdrop (unshaken) ----
     this.world.renderSky(ctx, w, h);
@@ -732,13 +792,43 @@ export class Engine {
     this.world.renderMotes(ctx, this.time);
     this.world.renderForeground(ctx, w, h, this.scroll);
 
-    ctx.restore();
+    ctx.restore(); // restore shake
+
+    // High-speed horizontal motion streaks
+    if (
+      this.speed > 520 &&
+      this.settings.speedEffects &&
+      !this.reduced &&
+      (this.state === "playing" || this.state === "dying")
+    ) {
+      this.renderSpeedEffects(ctx, w, h);
+    }
+
+    ctx.restore(); // restore camera transform
 
     this.world.renderVignette(ctx, w, h);
 
     if (this.state === "playing" || this.state === "dying") {
       this.renderHUD(ctx);
     }
+  }
+
+  /** Subtle peripheral racing wind streaks when reaching high velocities */
+  private renderSpeedEffects(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+    const alpha = Math.min(0.24, (this.speed - 520) / 800);
+    ctx.save();
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
+    ctx.lineWidth = 1.3;
+    for (let i = 0; i < 7; i++) {
+      const sy = (this.time * 850 + i * 143) % (h * 0.85);
+      const len = 70 + (i * 41) % 110;
+      const sx = w - ((this.time * 2600 + i * 390) % (w * 0.75));
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx - len, sy);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private renderHUD(_ctx: CanvasRenderingContext2D): void {}

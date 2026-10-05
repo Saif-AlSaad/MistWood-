@@ -21,6 +21,8 @@ export interface Palette {
 
 export type FoxPeltId = "ember" | "silver" | "spirit" | "autumn" | "shadow";
 
+export type FoxRarity = "common" | "rare" | "epic" | "legendary" | "celestial";
+
 export interface FoxPelt {
   id: FoxPeltId;
   name: string;
@@ -32,6 +34,7 @@ export interface FoxPelt {
   trailColor: string;
   description: string;
   perk: string;
+  rarity: FoxRarity;
 }
 
 export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
@@ -46,6 +49,7 @@ export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
     trailColor: "#ff9f43",
     description: "The classic forest guardian with an untamed spirit and fiery footsteps.",
     perk: "Standard stride & fiery ember sparks",
+    rarity: "common",
   },
   silver: {
     id: "silver",
@@ -58,6 +62,7 @@ export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
     trailColor: "#67e8f9",
     description: "Forged under winter constellations. Its steps whisper like frost upon the moss.",
     perk: "Moonlit crystalline trail & cool shimmer",
+    rarity: "rare",
   },
   spirit: {
     id: "spirit",
@@ -70,6 +75,7 @@ export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
     trailColor: "#2dd4bf",
     description: "A translucent apparition that flickers between dream and the waking woods.",
     perk: "Ethereal translucent body & celestial motes",
+    rarity: "celestial",
   },
   autumn: {
     id: "autumn",
@@ -82,6 +88,7 @@ export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
     trailColor: "#f59e0b",
     description: "Cloaked in golden leaves and rich loam, smelling of ancient cedar trees.",
     perk: "Golden sunburst sparks & autumn aura",
+    rarity: "epic",
   },
   shadow: {
     id: "shadow",
@@ -94,6 +101,7 @@ export const FOX_PELTS: Record<FoxPeltId, FoxPelt> = {
     trailColor: "#a855f7",
     description: "Born from the deepest hollows where starlight bends into silence.",
     perk: "Deep void violet silhouette & phantom sparks",
+    rarity: "legendary",
   },
 };
 
@@ -104,6 +112,7 @@ export interface Stats {
   newBest: boolean;
   nearMisses: number;
   maxSpeed: number;
+  maxSpeedKmh: number;
   biomeName: string;
   totalFlies: number;
 }
@@ -112,12 +121,42 @@ export interface HUDData {
   dist: number;
   flies: number;
   speed: number;
+  speedKmh: number;
+  maxSpeed: number;
+  maxSpeedKmh: number;
   ghostT: number;
   biomeName: string;
   biomeNext: string;
   biomeProgress: number;
   nearMissCount: number;
 }
+
+export interface GameSettings {
+  masterVolume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  screenShake: boolean;
+  reducedMotion: boolean;
+  particleIntensity: "high" | "low";
+  speedEffects: boolean;
+}
+
+export const DEFAULT_SETTINGS: GameSettings = {
+  masterVolume: 0.85,
+  sfxVolume: 0.85,
+  musicVolume: 0.75,
+  screenShake: true,
+  reducedMotion: false,
+  particleIntensity: "high",
+  speedEffects: true,
+};
+
+export const SETTINGS_STORAGE_KEY = "mistwood_settings";
+
+/** Converts px/s engine speed into cinematic racing km/h */
+export const speedToKmh = (pxPerSec: number): number => {
+  return Math.round(pxPerSec * 0.32);
+};
 
 export type GameState =
   | "loading"

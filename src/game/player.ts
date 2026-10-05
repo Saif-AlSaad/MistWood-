@@ -153,28 +153,40 @@ export class Player {
     const fade = this.dead ? Math.max(0, 1 - this.deadT * 1.8) : 1;
     if (fade <= 0) return;
 
-    // soft shadow on the ground
-    const sa = 0.32 * Math.max(0, 1 - this.py / 430);
+    // Double layered realistic contact shadow on the ground
+    const sa = 0.4 * Math.max(0, 1 - this.py / 420);
     if (sa > 0.01) {
-      ctx.fillStyle = `rgba(0,0,0,${sa.toFixed(3)})`;
+      // Soft outer shadow
+      ctx.fillStyle = `rgba(0,0,0,${(sa * 0.55).toFixed(3)})`;
       ctx.beginPath();
       ctx.ellipse(
         x,
-        gy + 7 * k,
-        Math.max(12, 30 - this.py * 0.045) * k,
-        7 * k,
+        gy + 6 * k,
+        Math.max(14, 34 - this.py * 0.045) * k,
+        8 * k,
         0,
         0,
         TAU,
       );
       ctx.fill();
+
+      // Tight inner dark contact shadow
+      if (this.py < 45) {
+        const ca = (1 - this.py / 45) * 0.45;
+        ctx.fillStyle = `rgba(0,0,0,${ca.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(x, gy + 4 * k, 20 * k, 3.8 * k, 0, 0, TAU);
+        ctx.fill();
+      }
     }
 
     const col = pelt.id === "spirit" ? "rgba(94, 234, 212, 0.55)" : (pelt.bodyColor || rgb(pal.ground));
 
     ctx.save();
     ctx.translate(x, gy - this.py);
-    ctx.rotate(clamp(-this.vy * 0.00024, -0.18, 0.25));
+    // Dynamic racing lean: forward tilt on run, pitch on jump/fall
+    const forwardLean = this.grounded ? 0.04 : 0;
+    ctx.rotate(clamp(-this.vy * 0.00024 + forwardLean, -0.22, 0.28));
 
     let sx = k * (1 + this.squash * 0.26 - this.stretch * 0.08);
     let sy = k * (1 - this.squash * 0.22 + this.stretch * 0.13);
@@ -294,16 +306,21 @@ export class Player {
     ctx.fillStyle = col;
     ctx.fill(p);
 
-    // glowing spirit eye
+    // glowing spirit eye with specular gleam
     ctx.fillStyle = pelt.eyeColor;
     ctx.beginPath();
-    ctx.arc(31, -47.5, 1.4, 0, TAU);
+    ctx.arc(31, -47.5, 1.5, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.arc(31.4, -47.9, 0.55, 0, TAU);
     ctx.fill();
 
     // subtle rim light with pelt accent
     ctx.strokeStyle = pelt.accentColor;
-    ctx.globalAlpha = (this.ghostT > 0 ? 0.75 : 0.38) * fade;
-    ctx.lineWidth = 1.4;
+    ctx.globalAlpha = (this.ghostT > 0 ? 0.85 : 0.46) * fade;
+    ctx.lineWidth = 1.6;
     ctx.lineJoin = "round";
     ctx.stroke(p);
 

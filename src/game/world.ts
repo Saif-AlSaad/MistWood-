@@ -165,7 +165,7 @@ export class WorldRenderer {
         im.onerror = () => res(null);
         im.src = src;
       });
-    const base = (import.meta.env.BASE_URL || "./").replace(/\/?$/, "/");
+    const base = ((import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || "./").replace(/\/?$/, "/");
     const [dawn, dusk] = await Promise.all([
       loadImg(`${base}images/forest-dawn.jpg`),
       loadImg(`${base}images/forest-dusk.jpg`),
@@ -974,15 +974,29 @@ export class WorldRenderer {
   /* ---------------- ground & decor ---------------- */
 
   renderGroundFill(ctx: CanvasRenderingContext2D, w: number, h: number, gy: number): void {
-    ctx.fillStyle = rgb(this.pal.ground);
-    ctx.fillRect(0, gy, w, h - gy);
-    const sheen = ctx.createLinearGradient(0, gy, 0, gy + 26);
-    sheen.addColorStop(0, rgb(this.pal.rim, 0.14));
-    sheen.addColorStop(1, rgb(this.pal.rim, 0));
+    const p = this.pal;
+    const depth = h - gy;
+
+    // Stratified organic earth gradient: top loam -> deep subsoil -> bedrock
+    const soilGrad = ctx.createLinearGradient(0, gy, 0, h);
+    soilGrad.addColorStop(0, rgb(p.ground));
+    soilGrad.addColorStop(0.18, rgb(mix(p.ground, [24, 18, 14], 0.45)));
+    soilGrad.addColorStop(0.65, rgb(mix(p.ground, [8, 10, 14], 0.75)));
+    soilGrad.addColorStop(1, rgb([4, 6, 10]));
+    ctx.fillStyle = soilGrad;
+    ctx.fillRect(0, gy, w, depth);
+
+    // Surface mossy edge rim glow
+    const sheen = ctx.createLinearGradient(0, gy - 1, 0, gy + 32);
+    sheen.addColorStop(0, rgb(p.rim, 0.28));
+    sheen.addColorStop(0.35, rgb(p.rim, 0.08));
+    sheen.addColorStop(1, rgb(p.rim, 0));
     ctx.fillStyle = sheen;
-    ctx.fillRect(0, gy, w, 26);
-    ctx.fillStyle = rgb(this.pal.rim, 0.2);
-    ctx.fillRect(0, gy - 0.5, w, 1);
+    ctx.fillRect(0, gy - 1, w, 33);
+
+    // Sharp top turf contact line
+    ctx.fillStyle = rgb(p.rim, 0.35);
+    ctx.fillRect(0, gy - 0.5, w, 1.2);
   }
 
   /** grass, tufts, stones, glow-shrooms — drawn over obstacle bases */
@@ -1057,21 +1071,25 @@ export class WorldRenderer {
     }
   }
 
-  /* ---------------- obstacles ---------------- */
+  /* ---------------- obstacles with 3D depth & shading ---------------- */
 
   renderObstacle(
     ctx: CanvasRenderingContext2D, ob: Obstacle, gy: number, time: number,
   ): void {
     const p = this.pal;
-    const col = rgb(p.ground);
-    const rim = rgb(p.rim, 0.16);
     const x = ob.x;
 
-    // ground shadow
+    // Contact drop shadow (double layered soft ambient occlusion)
     if (ob.kind !== "vine") {
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
+      // Soft outer shadow
+      ctx.fillStyle = "rgba(0,0,0,0.24)";
       ctx.beginPath();
-      ctx.ellipse(x, gy + 5, ob.w * 0.62, 6.5, 0, 0, TAU);
+      ctx.ellipse(x, gy + 4, ob.w * 0.68, 8, 0, 0, TAU);
+      ctx.fill();
+      // Tight inner dark contact occluder
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.ellipse(x, gy + 2, ob.w * 0.48, 3.8, 0, 0, TAU);
       ctx.fill();
     }
 
@@ -1079,55 +1097,169 @@ export class WorldRenderer {
       case "rock":
       case "boulder": {
         const v = ob.verts ?? [-ob.w / 2, 0, 0, -ob.h, ob.w / 2, 0];
-        ctx.fillStyle = col;
+        
+        // 3D rock volumetric gradient shading
+        const rockGrad = ctx.createLinearGradient(x - ob.w * 0.35, gy - ob.h, x + ob.w * 0.4, gy);
+        const litRock = mix(p.ground, p.rim, 0.28);
+        const midRock = mix(p.ground, [45, 52, 58], 0.35);
+        const shadowRock = mix(p.ground, [5, 6, 8], 0.6);
+        rockGrad.addColorStop(0, rgb(litRock));
+        rockGrad.addColorStop(0.35, rgb(midRock));
+        rockGrad.addColorStop(1, rgb(shadowRock));
+
+        ctx.fillStyle = rockGrad;
         ctx.beginPath();
         ctx.moveTo(x + v[0], gy + v[1]);
         for (let i = 2; i < v.length; i += 2) ctx.lineTo(x + v[i], gy + v[i + 1]);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = rim;
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        // a weathered crack
-        ctx.strokeStyle = rgb(p.rim, 0.1);
+
+        // Top faceted highlight rim
+        ctx.strokeStyle = rgb(p.rim, 0.32);
+        ctx.lineWidth = 1.6;
+        ctx.lineJoin = "round";
         ctx.beginPath();
-        ctx.moveTo(x - ob.w * 0.14, gy - ob.h * 0.75);
-        ctx.lineTo(x + ob.w * 0.05, gy - ob.h * 0.35);
-        ctx.lineTo(x - ob.w * 0.02, gy - ob.h * 0.1);
+        ctx.moveTo(x + v[0], gy + v[1]);
+        for (let i = 2; i < v.length; i += 2) {
+          if (v[i + 1] < -ob.h * 0.25) {
+            ctx.lineTo(x + v[i], gy + v[i + 1]);
+          }
+        }
         ctx.stroke();
-        break;
-      }
-      case "log": {
-        const hw = ob.w / 2;
-        const hh = ob.h / 2;
-        ctx.fillStyle = col;
+
+        // Weathered cracks with specular light and dark shadow edges
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.roundRect(x - hw, gy - ob.h, ob.w, ob.h, hh);
-        ctx.fill();
-        ctx.strokeStyle = rim;
-        ctx.lineWidth = 1.2;
+        ctx.moveTo(x - ob.w * 0.15, gy - ob.h * 0.76);
+        ctx.lineTo(x + ob.w * 0.04, gy - ob.h * 0.38);
+        ctx.lineTo(x - ob.w * 0.03, gy - ob.h * 0.12);
         ctx.stroke();
-        // end grain ring
+
         ctx.strokeStyle = rgb(p.rim, 0.22);
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
-        ctx.ellipse(x + hw - 3, gy - hh, 3.4, hh * 0.82, 0, 0, TAU);
+        ctx.moveTo(x - ob.w * 0.15 + 1, gy - ob.h * 0.76);
+        ctx.lineTo(x + ob.w * 0.04 + 1, gy - ob.h * 0.38);
         ctx.stroke();
-        // branch stubs
-        ctx.fillStyle = col;
-        for (let s = 0; s < 2; s++) {
-          const sx = x - hw * 0.5 + hash(ob.seed + s, 111) * ob.w * 0.8;
-          const sl = 8 + hash(ob.seed + s, 112) * 9;
+
+        // Forest lichen / moss stipples on upper facets
+        const mossColor = rgb(mix(p.ground, [85, 130, 75], 0.4), 0.7);
+        ctx.fillStyle = mossColor;
+        for (let m = 0; m < 5; m++) {
+          const mx = x + (hash(ob.seed + m, 301) - 0.5) * ob.w * 0.55;
+          const my = gy - ob.h * (0.65 + hash(ob.seed + m, 302) * 0.25);
           ctx.beginPath();
-          ctx.moveTo(sx - 3.4, gy - ob.h + 2);
-          ctx.lineTo(sx, gy - ob.h - sl);
-          ctx.lineTo(sx + 3.4, gy - ob.h + 2);
-          ctx.closePath();
+          ctx.ellipse(mx, my, 2.5 + hash(ob.seed + m, 303) * 3, 1.8, 0, 0, TAU);
           ctx.fill();
         }
         break;
       }
+
+      case "log": {
+        const hw = ob.w / 2;
+        const hh = ob.h / 2;
+        
+        // 3D cylindrical bark gradient
+        const logGrad = ctx.createLinearGradient(x, gy - ob.h, x, gy);
+        const topBark = mix(p.ground, p.rim, 0.25);
+        const midBark = mix(p.ground, [65, 42, 28], 0.3);
+        const underBark = mix(p.ground, [4, 4, 6], 0.7);
+        logGrad.addColorStop(0, rgb(topBark));
+        logGrad.addColorStop(0.3, rgb(midBark));
+        logGrad.addColorStop(1, rgb(underBark));
+
+        ctx.fillStyle = logGrad;
+        ctx.beginPath();
+        ctx.roundRect(x - hw, gy - ob.h, ob.w, ob.h, hh);
+        ctx.fill();
+
+        // Bark striation fissures
+        ctx.strokeStyle = "rgba(0,0,0,0.45)";
+        ctx.lineWidth = 1.2;
+        for (let s = 0; s < 4; s++) {
+          const lx = x - hw * 0.75 + hash(ob.seed + s, 310) * ob.w * 0.65;
+          const ly = gy - ob.h + 3 + hash(ob.seed + s, 311) * (ob.h - 8);
+          ctx.beginPath();
+          ctx.moveTo(lx, ly);
+          ctx.lineTo(lx + 14 + hash(ob.seed + s, 312) * 16, ly + (hash(ob.seed + s, 313) - 0.5) * 2);
+          ctx.stroke();
+        }
+
+        // Top specular ridge highlight
+        ctx.strokeStyle = rgb(p.rim, 0.32);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x - hw + 8, gy - ob.h + 1.2);
+        ctx.lineTo(x + hw - 12, gy - ob.h + 1.2);
+        ctx.stroke();
+
+        // End grain cross-section concentric rings
+        const endX = x + hw - 3.5;
+        const endY = gy - hh;
+        ctx.fillStyle = rgb(mix(p.ground, p.rim, 0.18));
+        ctx.beginPath();
+        ctx.ellipse(endX, endY, 4.2, hh * 0.88, 0, 0, TAU);
+        ctx.fill();
+
+        ctx.strokeStyle = rgb(p.rim, 0.38);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.ellipse(endX, endY, 4.2, hh * 0.88, 0, 0, TAU);
+        ctx.stroke();
+
+        // Inner growth ring
+        ctx.strokeStyle = rgb(p.rim, 0.24);
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(endX, endY, 2.2, hh * 0.48, 0, 0, TAU);
+        ctx.stroke();
+
+        // Branch stubs with 3D cone look
+        for (let s = 0; s < 2; s++) {
+          const sx = x - hw * 0.5 + hash(ob.seed + s, 111) * ob.w * 0.8;
+          const sl = 8 + hash(ob.seed + s, 112) * 10;
+          ctx.fillStyle = rgb(midBark);
+          ctx.beginPath();
+          ctx.moveTo(sx - 3.6, gy - ob.h + 2);
+          ctx.lineTo(sx, gy - ob.h - sl);
+          ctx.lineTo(sx + 3.6, gy - ob.h + 2);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = rgb(p.rim, 0.28);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(sx - 3.6, gy - ob.h + 2);
+          ctx.lineTo(sx, gy - ob.h - sl);
+          ctx.stroke();
+        }
+        break;
+      }
+
       case "bramble": {
-        ctx.fillStyle = col;
+        // Deep background thorns
+        ctx.strokeStyle = rgb(mix(p.ground, [0, 0, 0], 0.5));
+        ctx.lineWidth = 3.6;
+        for (let s = 0; s < 3; s++) {
+          const sx = x - ob.w / 2 + hash(ob.seed + s + 10, 114) * ob.w;
+          ctx.beginPath();
+          ctx.moveTo(sx, gy);
+          ctx.quadraticCurveTo(
+            sx + (hash(ob.seed + s + 10, 115) - 0.5) * 35,
+            gy - ob.h * 1.15,
+            sx + (hash(ob.seed + s + 10, 116) - 0.5) * 50,
+            gy - ob.h * (0.95 + hash(ob.seed + s + 10, 117) * 0.4),
+          );
+          ctx.stroke();
+        }
+
+        // Foreground jagged thorn brush
+        const brambleGrad = ctx.createLinearGradient(x, gy - ob.h, x, gy);
+        brambleGrad.addColorStop(0, rgb(mix(p.ground, p.rim, 0.3)));
+        brambleGrad.addColorStop(1, rgb(p.ground));
+        ctx.fillStyle = brambleGrad;
+
         ctx.beginPath();
         ctx.moveTo(x - ob.w / 2, gy);
         const spikes = 9;
@@ -1142,75 +1274,156 @@ export class WorldRenderer {
         ctx.lineTo(x + ob.w / 2, gy);
         ctx.closePath();
         ctx.fill();
-        // arcing thorn stems
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2.4;
+
+        // Foreground arcing briar branches with sharp thorns
+        ctx.strokeStyle = rgb(mix(p.ground, [50, 25, 20], 0.3));
+        ctx.lineWidth = 2.6;
         for (let s = 0; s < 4; s++) {
           const sx = x - ob.w / 2 + hash(ob.seed + s, 114) * ob.w;
+          const endX = sx + (hash(ob.seed + s, 116) - 0.5) * 46;
+          const endY = gy - ob.h * (0.9 + hash(ob.seed + s, 117) * 0.4);
           ctx.beginPath();
           ctx.moveTo(sx, gy);
           ctx.quadraticCurveTo(
             sx + (hash(ob.seed + s, 115) - 0.5) * 30,
             gy - ob.h * 1.1,
-            sx + (hash(ob.seed + s, 116) - 0.5) * 46,
-            gy - ob.h * (0.9 + hash(ob.seed + s, 117) * 0.4),
+            endX,
+            endY,
           );
+          ctx.stroke();
+
+          // Sharp thorn tip specular spark
+          ctx.fillStyle = rgb(p.rim, 0.4);
+          ctx.beginPath();
+          ctx.arc(endX, endY, 1.4, 0, TAU);
+          ctx.fill();
+        }
+        break;
+      }
+
+      case "stump": {
+        const hw = ob.w / 2;
+        
+        // 3D cylindrical trunk shading with root flaring
+        const stumpGrad = ctx.createLinearGradient(x - hw, gy - ob.h, x + hw, gy);
+        stumpGrad.addColorStop(0, rgb(mix(p.ground, p.rim, 0.22)));
+        stumpGrad.addColorStop(0.5, rgb(mix(p.ground, [60, 45, 30], 0.25)));
+        stumpGrad.addColorStop(1, rgb(mix(p.ground, [8, 8, 12], 0.55)));
+
+        ctx.fillStyle = stumpGrad;
+        ctx.beginPath();
+        ctx.moveTo(x - hw * 1.18, gy);
+        ctx.quadraticCurveTo(x - hw * 0.95, gy - ob.h * 0.3, x - hw * 0.86, gy - ob.h);
+        ctx.quadraticCurveTo(x, gy - ob.h - 5, x + hw * 0.86, gy - ob.h);
+        ctx.quadraticCurveTo(x + hw * 0.95, gy - ob.h * 0.3, x + hw * 1.18, gy);
+        ctx.closePath();
+        ctx.fill();
+
+        // Top cut face with concentric tree rings
+        ctx.fillStyle = rgb(mix(p.ground, p.rim, 0.2));
+        ctx.beginPath();
+        ctx.ellipse(x, gy - ob.h + 1, hw * 0.8, 3.8, 0, 0, TAU);
+        ctx.fill();
+
+        ctx.strokeStyle = rgb(p.rim, 0.35);
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - ob.h + 1, hw * 0.8, 3.8, 0, 0, TAU);
+        ctx.stroke();
+
+        // Inner tree growth ring
+        ctx.strokeStyle = rgb(p.rim, 0.2);
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - ob.h + 1, hw * 0.45, 2.2, 0, 0, TAU);
+        ctx.stroke();
+
+        // Vertical bark ridges
+        ctx.strokeStyle = "rgba(0,0,0,0.4)";
+        ctx.lineWidth = 1.2;
+        for (let r = 0; r < 3; r++) {
+          const rx = x - hw * 0.45 + r * hw * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(rx, gy - ob.h + 4);
+          ctx.lineTo(rx + (hash(ob.seed + r, 320) - 0.5) * 4, gy - 2);
           ctx.stroke();
         }
         break;
       }
-      case "stump": {
-        const hw = ob.w / 2;
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.moveTo(x - hw, gy);
-        ctx.lineTo(x - hw * 0.86, gy - ob.h);
-        ctx.quadraticCurveTo(x, gy - ob.h - 5, x + hw * 0.86, gy - ob.h);
-        ctx.lineTo(x + hw, gy);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = rgb(p.rim, 0.2);
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.ellipse(x, gy - ob.h + 1, hw * 0.8, 3.6, 0, 0, TAU);
-        ctx.stroke();
-        break;
-      }
+
       case "vine": {
-        // hanging thorn vine — slide beneath it
+        // Hanging thorn vine with realistic twist & sway
         const top = gy - 320 - hash(ob.seed, 118) * 140;
         const botY = gy - ob.h;
         const sway = Math.sin(time * 0.9 + ob.seed) * 7;
-        ctx.strokeStyle = col;
+        
+        // Darker shadow vine spine
+        ctx.strokeStyle = rgb(mix(p.ground, [0, 0, 0], 0.6));
         ctx.lineCap = "round";
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 7.5;
         ctx.beginPath();
         ctx.moveTo(x, top);
         ctx.quadraticCurveTo(x + sway * 1.6, (top + botY) / 2, x + sway, botY + 8);
         ctx.quadraticCurveTo(x + sway - 2, botY + 4, x + sway - 4, botY);
         ctx.stroke();
-        // leaves
-        ctx.fillStyle = col;
+
+        // Lit vine core
+        ctx.strokeStyle = rgb(mix(p.ground, p.rim, 0.18));
+        ctx.lineWidth = 5.2;
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.quadraticCurveTo(x + sway * 1.6, (top + botY) / 2, x + sway, botY + 8);
+        ctx.stroke();
+
+        // Specular highlight fiber
+        ctx.strokeStyle = rgb(p.rim, 0.25);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x + 1, top);
+        ctx.quadraticCurveTo(x + sway * 1.6 + 1, (top + botY) / 2, x + sway + 1, botY + 8);
+        ctx.stroke();
+
+        // Realistic veined foliage hanging along the vine
         for (let l = 0; l < 6; l++) {
           const fr = (l + 1) / 7;
           const ly = top + (botY - top) * fr;
           const lx = x + sway * fr * 1.4 + (hash(ob.seed + l, 119) - 0.5) * 14;
           ctx.save();
           ctx.translate(lx, ly);
-          ctx.rotate(hash(ob.seed + l, 120) * TAU);
+          ctx.rotate(hash(ob.seed + l, 120) * TAU + Math.sin(time * 1.4 + l) * 0.15);
+          
+          ctx.fillStyle = rgb(mix(p.ground, [35, 75, 45], 0.35));
           ctx.beginPath();
-          ctx.ellipse(0, 0, 8 + hash(ob.seed + l, 121) * 5, 3.6, 0, 0, TAU);
+          ctx.ellipse(0, 0, 8 + hash(ob.seed + l, 121) * 5, 3.8, 0, 0, TAU);
           ctx.fill();
+
+          ctx.strokeStyle = rgb(p.rim, 0.24);
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(-6, 0);
+          ctx.lineTo(6, 0);
+          ctx.stroke();
+
           ctx.restore();
         }
-        // thorn cluster at the tip — the danger zone
+
+        // Dangerous sharp thorn cluster at bottom (clearance zone)
+        ctx.strokeStyle = rgb(mix(p.ground, p.rim, 0.4));
         ctx.lineWidth = 3.2;
         for (let tth = 0; tth < 4; tth++) {
           const dir = (hash(ob.seed + tth, 122) - 0.5) * 2;
+          const tipX = x + sway + dir * 10;
+          const tipY = botY + 2 + hash(ob.seed + tth, 123) * 9;
           ctx.beginPath();
           ctx.moveTo(x + sway, botY + 10);
-          ctx.lineTo(x + sway + dir * 9, botY + 2 + hash(ob.seed + tth, 123) * 8);
+          ctx.lineTo(tipX, tipY);
           ctx.stroke();
+
+          // Specular tip glint
+          ctx.fillStyle = rgb(p.rim, 0.65);
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, 1.2, 0, TAU);
+          ctx.fill();
         }
         break;
       }

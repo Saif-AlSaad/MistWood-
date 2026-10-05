@@ -7,6 +7,12 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private windFilter: BiquadFilterNode | null = null;
+  private sfxGain: GainNode | null = null;
+  private musicGain: GainNode | null = null;
+  private windGain: GainNode | null = null;
+  private masterVolume = 0.85;
+  private sfxVolume = 0.85;
+  private musicVolume = 0.75;
   private muted = false;
   private chirpTimer = 5;
 
@@ -22,9 +28,18 @@ export class AudioEngine {
         .webkitAudioContext;
     if (!AC) return;
     this.ctx = new AC();
+
     this.master = this.ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.9;
+    this.master.gain.value = this.muted ? 0 : this.masterVolume;
     this.master.connect(this.ctx.destination);
+
+    this.sfxGain = this.ctx.createGain();
+    this.sfxGain.gain.value = this.sfxVolume;
+    this.sfxGain.connect(this.master);
+
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = this.musicVolume;
+    this.musicGain.connect(this.master);
 
     // shared noise buffer
     const len = this.ctx.sampleRate * 2;
@@ -40,10 +55,53 @@ export class AudioEngine {
     if (this.ctx && this.master) {
       this.master.gain.cancelScheduledValues(this.ctx.currentTime);
       this.master.gain.linearRampToValueAtTime(
-        m ? 0 : 0.9,
+        m ? 0 : this.masterVolume,
         this.ctx.currentTime + 0.2,
       );
     }
+  }
+
+  setMasterVolume(v: number): void {
+    this.masterVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.master && !this.muted) {
+      this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.master.gain.linearRampToValueAtTime(
+        this.masterVolume,
+        this.ctx.currentTime + 0.05,
+      );
+    }
+  }
+
+  setSfxVolume(v: number): void {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.sfxGain) {
+      this.sfxGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.sfxGain.gain.linearRampToValueAtTime(
+        this.sfxVolume,
+        this.ctx.currentTime + 0.05,
+      );
+    }
+  }
+
+  setMusicVolume(v: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.musicGain) {
+      this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.musicGain.gain.linearRampToValueAtTime(
+        this.musicVolume,
+        this.ctx.currentTime + 0.05,
+      );
+    }
+  }
+
+  /** Dynamically modulate wind rushing intensity and pitch based on speed */
+  setSpeed(speed: number): void {
+    if (!this.ctx || !this.windFilter || !this.windGain) return;
+    const ratio = Math.max(0, Math.min(1, (speed - 340) / 470));
+    const targetFreq = 420 + ratio * 850;
+    const targetGain = 0.045 + ratio * 0.075;
+    this.windFilter.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.15);
+    this.windGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.15);
   }
 
   private get t(): number {
@@ -58,7 +116,8 @@ export class AudioEngine {
     g?: number;
     at?: number;
   }): void {
-    if (!this.ctx || !this.master) return;
+    const dest = this.sfxGain || this.master;
+    if (!this.ctx || !dest) return;
     const t = o.at ?? this.t;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -69,7 +128,7 @@ export class AudioEngine {
     gain.gain.exponentialRampToValueAtTime(o.g ?? 0.15, t + 0.014);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
     osc.connect(gain);
-    gain.connect(this.master);
+    gain.connect(dest);
     osc.start(t);
     osc.stop(t + o.dur + 0.05);
   }
@@ -83,7 +142,8 @@ export class AudioEngine {
     at?: number;
     q?: number;
   }): void {
-    if (!this.ctx || !this.master || !this.noiseBuf) return;
+    const dest = this.sfxGain || this.master;
+    if (!this.ctx || !dest || !this.noiseBuf) return;
     const t = o.at ?? this.t;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -100,13 +160,14 @@ export class AudioEngine {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(this.master);
+    gain.connect(dest);
     src.start(t);
     src.stop(t + o.dur + 0.05);
   }
 
   private startWind(): void {
-    if (!this.ctx || !this.master || !this.noiseBuf) return;
+    const dest = this.musicGain || this.master;
+    if (!this.ctx || !dest || !this.noiseBuf) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     src.loop = true;
@@ -114,11 +175,11 @@ export class AudioEngine {
     this.windFilter.type = "bandpass";
     this.windFilter.Q.value = 0.45;
     this.windFilter.frequency.value = 420;
-    const windGain = this.ctx.createGain();
-    windGain.gain.value = 0.05;
+    this.windGain = this.ctx.createGain();
+    this.windGain.gain.value = 0.05;
     src.connect(this.windFilter);
-    this.windFilter.connect(windGain);
-    windGain.connect(this.master);
+    this.windFilter.connect(this.windGain);
+    this.windGain.connect(dest);
     src.start();
 
     // slow gusts
@@ -135,7 +196,7 @@ export class AudioEngine {
     const lfo2Gain = this.ctx.createGain();
     lfo2Gain.gain.value = 0.022;
     lfo2.connect(lfo2Gain);
-    lfo2Gain.connect(windGain.gain);
+    lfo2Gain.connect(this.windGain.gain);
     lfo2.start();
   }
 
@@ -219,7 +280,7 @@ export class AudioEngine {
 
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.musicGain || this.master);
 
     osc.start(at);
     osc.stop(at + dur + 0.1);
@@ -269,5 +330,20 @@ export class AudioEngine {
 
   ui(): void {
     this.tone({ f0: 740, dur: 0.09, g: 0.05, type: "triangle" });
+  }
+
+  uiHover(): void {
+    this.tone({ f0: 880, dur: 0.035, g: 0.02, type: "sine" });
+  }
+
+  uiClick(): void {
+    this.tone({ f0: 640, f1: 960, dur: 0.065, g: 0.04, type: "triangle" });
+  }
+
+  newRecord(): void {
+    const t = this.t;
+    [587.33, 739.99, 880.0, 1174.66].forEach((f, i) => {
+      this.tone({ f0: f, dur: 0.45, g: 0.08, at: t + i * 0.09, type: "triangle" });
+    });
   }
 }
