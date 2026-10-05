@@ -21,7 +21,7 @@ import {
   type AnimalRarity,
   mapLegacyPeltId,
 } from "../../game/animals";
-import { Garage3DView } from "./Garage3DView";
+import { Garage2DView } from "./Garage2DView";
 
 interface GarageProps {
   activePeltId: string;
@@ -192,9 +192,9 @@ export const Garage: React.FC<GarageProps> = ({
 
         {/* Central Stage: 3D Preview + Animal Info */}
         <div className="relative flex flex-1 flex-col overflow-hidden min-h-0">
-          {/* Main 3D Viewport Area */}
+          {/* Main 2D Viewport Area */}
           <div className="relative flex-1 w-full min-h-[220px] sm:min-h-[300px]">
-            <Garage3DView animal={selectedAnimal} className="w-full h-full" />
+            <Garage2DView animal={selectedAnimal} className="w-full h-full" />
 
             {/* Left/Right Carousel Nav Arrows Overlay */}
             <button
