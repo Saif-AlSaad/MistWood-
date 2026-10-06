@@ -1,7 +1,7 @@
 /* MistWood Masterclass 2D Realistic Animal Anatomy, Art & Animation System */
 
 import type { AnimalDefinition } from "./animals";
-import { TAU, clamp, lerp } from "./types";
+import { TAU, clamp, lerp, mix, rgb, hex } from "./types";
 
 export interface AnimalAnimParams {
   time: number;
@@ -79,11 +79,17 @@ export class Animal2DRenderer {
       this.renderLegs(ctx, animal, anim, bodyBob, true);
     }
 
-    // 2. TAIL (rendered behind body)
+    // 2. TAIL (multi-joint aerodynamic kinematic chain rendered behind body)
     this.renderTail(ctx, animal, anim, time);
+
+    // 2.5 FAR EAR (rendered behind the cranium for true stereoscopic 3D depth)
+    this.renderEars(ctx, animal, anim, time, true);
 
     // 3. MAIN ANATOMICAL BODY & MARKINGS
     this.renderTorsoAndHead(ctx, animal, anim, time);
+
+    // 3.5 NEAR EAR (rendered in front of cranium with high-fidelity pinna and fluff)
+    this.renderEars(ctx, animal, anim, time, false);
 
     // 4. FRONT LEGS (rendered in front of body for depth)
     if (!isSliding) {
@@ -97,10 +103,13 @@ export class Animal2DRenderer {
     if (id === "deer") {
       this.renderDeerAntlers(ctx, animal);
     } else if (id === "lion") {
-      this.renderLionMane(ctx, animal, time);
+      this.renderLionMane(ctx, animal, time, speed);
     } else if (id === "moon_fox") {
       this.renderMoonFoxCelestialEffects(ctx, animal, time);
     }
+
+    // 5.5 DELICATE SNOUT WHISKERS (Secondary motion fluttering in airstream)
+    this.renderWhiskers(ctx, animal, anim, time);
 
     // 6. EYE & SPECULAR GLEAM
     this.renderEye(ctx, animal);
@@ -274,7 +283,7 @@ export class Animal2DRenderer {
   }
 
   /* ------------------------------------------------------------ */
-  /* TAIL DYNAMICS                                                 */
+  /* TAIL DYNAMICS & MULTI-JOINT AERODYNAMIC KINEMATIC CHAIN      */
   /* ------------------------------------------------------------ */
 
   private static renderTail(
@@ -284,72 +293,341 @@ export class Animal2DRenderer {
     time: number
   ): void {
     const { id, colors } = animal;
-    const { isGrounded, speed, isSliding } = anim;
+    const { isGrounded, speed, vy, isSliding } = anim;
 
-    const waveSpeed = isGrounded && speed > 20 ? 7.2 : 3.2;
-    const waveAmp = isGrounded && speed > 20 ? 4.5 : 2.5;
-    const tailWave = Math.sin(time * waveSpeed + 1.2) * waveAmp + (isGrounded ? 0 : -6) + (isSliding ? 12 : 0);
+    // Relative airspeed and aerodynamic drag
+    const airspeed = Math.max(speed, 60);
+    const windDrag = clamp((airspeed - 160) / 460, 0, 1.4);
+    const streamX = -windDrag * 8.5; // Horizontal streaming lag
+    const airFlutter = Math.sin(time * 26 + 1.2) * (windDrag * 1.6);
+
+    // In-air vertical inertia & air resistance
+    // On upward leap (vy < 0): heavy tail drags down relative to rising pelvis
+    // On downward drop (vy > 0): upward air stream billows fluffy brush upward like a parachute
+    const inAirLag = !isGrounded ? clamp(-vy * 0.016, -10, 10) : 0;
+    const inAirBillow = !isGrounded ? clamp(vy * 0.024, 0, 14) : 0;
+    const slideDrop = isSliding ? 13 : 0;
+
+    // Quadruped gallop/trot gait wave frequency with traveling phase lag
+    const gaitFreq = isGrounded && speed > 20 ? (speed / 360) * 8.6 : 3.4;
+    const basePhase = time * gaitFreq;
+
+    // 3-Joint Progressive Wave Delays (S-curve flow)
+    const wave1 = Math.sin(basePhase) * 4.2 - inAirLag * 0.45 + inAirBillow * 0.5 + slideDrop * 0.5;
+    const wave2 = Math.sin(basePhase - 0.75) * 5.8 - inAirLag * 0.75 + inAirBillow * 0.85 + slideDrop * 0.85 + airFlutter;
+    const wave3 = Math.sin(basePhase - 1.5) * 7.2 - inAirLag * 1.05 + inAirBillow * 1.25 + slideDrop + airFlutter * 1.4;
 
     if (id === "fox" || id === "moon_fox") {
-      // Bushy organic plume tail with tapered layers
+      // Fox / Moon Fox: Majestic, lush multi-tiered plume with aerodynamic trailing taper
+      const rootX = -16;
+      const rootY = -28;
+
+      const j1X = -27 + streamX * 0.4;
+      const j1Y = -34 + wave1 * 0.6;
+
+      const j2X = -37 + streamX * 0.8;
+      const j2Y = -26 + wave2 * 0.85;
+
+      const tipX = -48 + streamX * 1.15;
+      const tipY = -15 + wave3;
+
+      // 1. Base thick root spine
       ctx.strokeStyle = colors.body;
       ctx.lineCap = "round";
-
-      // Base thick curve
+      ctx.lineJoin = "round";
       ctx.lineWidth = 12.5;
       ctx.beginPath();
-      ctx.moveTo(-16, -30);
-      ctx.quadraticCurveTo(-28, -35 + tailWave * 0.4, -36, -28 + tailWave * 0.7);
+      ctx.moveTo(rootX, rootY);
+      ctx.quadraticCurveTo(j1X, j1Y, j2X, j2Y);
       ctx.stroke();
 
-      // Middle brush
-      ctx.lineWidth = 9.0;
+      // 2. Voluminous middle brush plume (widest fluffy section)
+      ctx.lineWidth = 14.2;
       ctx.beginPath();
-      ctx.moveTo(-36, -28 + tailWave * 0.7);
-      ctx.quadraticCurveTo(-42, -22 + tailWave, -46, -14 + tailWave);
+      ctx.moveTo(j1X, j1Y);
+      ctx.quadraticCurveTo((j1X + j2X) * 0.5 - 2, (j1Y + j2Y) * 0.5, j2X, j2Y);
       ctx.stroke();
 
-      // Contrasting White/Accent Tip
+      // 3. Tapered tip connection
+      ctx.lineWidth = 8.5;
+      ctx.beginPath();
+      ctx.moveTo(j2X, j2Y);
+      ctx.quadraticCurveTo((j2X + tipX) * 0.5 - 1, (j2Y + tipY) * 0.5, tipX, tipY);
+      ctx.stroke();
+
+      // 4. Iconic contrasting tip (white or celestial silver/cyan)
       ctx.fillStyle = colors.accent;
       ctx.beginPath();
-      ctx.arc(-46, -13 + tailWave, 5.2, 0, TAU);
+      ctx.moveTo(j2X + 2, j2Y + 1);
+      ctx.quadraticCurveTo(j2X - 4, (j2Y + tipY) * 0.5, tipX - 2, tipY);
+      ctx.arc(tipX, tipY, 4.8, 0, TAU);
       ctx.fill();
+
+      // Moon Fox Starlight Embers streaming from tail plume
+      if (id === "moon_fox" && (speed > 80 || !isGrounded)) {
+        ctx.save();
+        ctx.fillStyle = colors.accent;
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < 3; i++) {
+          const emPhase = (time * 6 + i * 2.1) % 1;
+          const emX = tipX - emPhase * 28 - i * 6;
+          const emY = tipY + Math.sin(time * 12 + i * 2) * 4 - emPhase * 8;
+          const emR = (1 - emPhase) * 2.2;
+          ctx.beginPath();
+          ctx.arc(emX, emY, emR, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
 
     } else if (id === "lion") {
-      // Long muscular feline tail curving down then up
+      // Panthera Leo: Long, muscular feline tail with expressive S-curve and whip-lagged pom-pom tuft
+      const rootX = -18;
+      const rootY = -27;
+
+      const j1X = -28 + streamX * 0.35;
+      const j1Y = -20 + wave1 * 0.4;
+
+      const j2X = -38 + streamX * 0.75;
+      const j2Y = -24 + wave2 * 0.7;
+
+      const tipX = -46 + streamX * 1.05;
+      const tipY = -18 + wave3 * 0.9;
+
       ctx.strokeStyle = colors.body;
-      ctx.lineWidth = 5.6;
+      ctx.lineWidth = 5.8;
       ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(-18, -29);
-      ctx.quadraticCurveTo(-32, -36 + tailWave * 0.5, -40, -23 + tailWave * 0.8);
+      ctx.moveTo(rootX, rootY);
+      ctx.bezierCurveTo(j1X, j1Y, j2X, j2Y, tipX, tipY);
       ctx.stroke();
 
-      // Dark fur tuft at tip
+      // Signature dark tassel tuft at the terminal end
       ctx.fillStyle = colors.secondary || "#3d1b06";
       ctx.beginPath();
-      ctx.arc(-40, -22 + tailWave * 0.8, 6.8, 0, TAU);
+      ctx.ellipse(tipX, tipY, 6.6, 5.2, -0.3 + wave3 * 0.05, 0, TAU);
       ctx.fill();
+
+      // Fine wisps at tip
+      ctx.strokeStyle = colors.secondary || "#3d1b06";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - 4, tipY + 2);
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - 3, tipY - 3);
+      ctx.stroke();
 
     } else if (id === "deer") {
-      // Short graceful flicking tail with white underside
+      // Cervid: Short graceful white-tailed deer flag that raises & flicks alertly on jumps
+      const rootX = -19;
+      const rootY = -30;
+      const alertLift = !isGrounded ? -6 : 0;
+      const deerWave = wave1 * 0.35 + alertLift;
+
       ctx.fillStyle = colors.body;
       ctx.beginPath();
-      ctx.ellipse(-19, -32 + tailWave * 0.25, 4.2, 7.5, -0.4, 0, TAU);
+      ctx.ellipse(rootX - 2, rootY + deerWave, 4.4, 7.8, -0.45, 0, TAU);
       ctx.fill();
 
-      ctx.fillStyle = colors.underbelly;
+      // Contrasting white underside flashing
+      ctx.fillStyle = colors.underbelly || "#f4f4f5";
       ctx.beginPath();
-      ctx.ellipse(-20, -32 + tailWave * 0.25, 2.8, 5.5, -0.4, 0, TAU);
+      ctx.ellipse(rootX - 3, rootY + deerWave, 2.9, 5.8, -0.45, 0, TAU);
       ctx.fill();
 
     } else if (id === "panda") {
-      // Short rounded bear tail
+      // Stubby rounded ursine tail with subtle springy step bounce
+      const rootX = -18;
+      const rootY = -27;
+      const pandaWave = Math.sin(basePhase) * 1.8 + slideDrop * 0.3;
+
       ctx.fillStyle = colors.secondary || "#18181b";
       ctx.beginPath();
-      ctx.arc(-18, -27 + tailWave * 0.2, 6.0, 0, TAU);
+      ctx.arc(rootX, rootY + pandaWave, 6.2, 0, TAU);
       ctx.fill();
     }
+  }
+
+  /* ------------------------------------------------------------ */
+  /* DYNAMIC SECONDARY EAR MOTION & STEREOSCOPIC 3D LAYERING     */
+  /* ------------------------------------------------------------ */
+
+  private static renderEars(
+    ctx: CanvasRenderingContext2D,
+    animal: AnimalDefinition,
+    anim: AnimalAnimParams,
+    time: number,
+    isBackLayer: boolean
+  ): void {
+    const { id, colors } = animal;
+    const { speed, isGrounded, isSliding } = anim;
+
+    // Aerodynamic layback from forward relative airspeed
+    const speedRatio = clamp((speed - 180) / 480, 0, 1);
+    let layback = speedRatio * 0.28;
+
+    // Airborne alertness: ears stand erect and tilt forward to gauge jump trajectory
+    if (!isGrounded) {
+      layback -= 0.16;
+    }
+
+    // Sliding tuck: ears streamline flat back against skull to dodge low branches
+    if (isSliding) {
+      layback += 0.44;
+    }
+
+    // Involuntary wild animal micro-twitching (scanning the forest sounds)
+    const twitchCycle = (time * 1.7 + (isBackLayer ? 2.1 : 0)) % 3.6;
+    const twitch = twitchCycle < 0.15 ? Math.sin(twitchCycle * 42) * 0.14 : 0;
+
+    const earRotation = layback + twitch;
+
+    ctx.save();
+
+    if (id === "fox" || id === "moon_fox") {
+      // Vulpes vulpes: Large pointed triangular pinnae with dark backs and inner fur tufts
+      const baseX = isBackLayer ? 13 : 23;
+      const baseY = isBackLayer ? -52 : -53.5;
+      const earScale = isBackLayer ? 0.90 : 1.0;
+
+      ctx.translate(baseX, baseY);
+      ctx.rotate(earRotation * (isBackLayer ? 0.88 : 1.0));
+      ctx.scale(earScale, earScale);
+
+      // Back layer is in shadow for 3D stereoscopic depth
+      const earBodyColor = isBackLayer
+        ? (colors.secondary || "#8a3411")
+        : colors.body;
+
+      // 1. Outer Ear Pinna Shell
+      ctx.fillStyle = earBodyColor;
+      ctx.beginPath();
+      ctx.moveTo(-5, 0);
+      ctx.quadraticCurveTo(-4, -10, 0, -15.5); // ear tip
+      ctx.quadraticCurveTo(5, -9, 4, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. Dark Charcoal/Black Outer Rim Backing (classic fox ear mark)
+      ctx.strokeStyle = "#18181b";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(-3, -8);
+      ctx.lineTo(0, -15.5);
+      ctx.lineTo(3.5, -7);
+      ctx.stroke();
+
+      if (!isBackLayer) {
+        // 3. Warm Inner Ear Canal Cavity
+        ctx.fillStyle = colors.underbelly || "#fef3c7";
+        ctx.beginPath();
+        ctx.moveTo(-2.8, -1.5);
+        ctx.quadraticCurveTo(-2, -7.5, 0, -12);
+        ctx.quadraticCurveTo(2.4, -7, 2.2, -1.5);
+        ctx.closePath();
+        ctx.fill();
+
+        // 4. Fluffy White Inner Fur Tufts (sprouting from ear canal)
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(-1, -2);
+        ctx.lineTo(-2, -6.5);
+        ctx.moveTo(0.5, -2);
+        ctx.lineTo(1, -7.2);
+        ctx.stroke();
+      }
+
+    } else if (id === "deer") {
+      // Cervid: Slender, graceful oval ears tilted outward
+      const baseX = isBackLayer ? 15 : 24;
+      const baseY = isBackLayer ? -62 : -64;
+      const earScale = isBackLayer ? 0.90 : 1.0;
+
+      ctx.translate(baseX, baseY);
+      ctx.rotate(earRotation * (isBackLayer ? 0.82 : 1.0) - 0.22);
+      ctx.scale(earScale, earScale);
+
+      const earBodyColor = isBackLayer ? "#6e3f1c" : colors.body;
+
+      // Outer Pinna
+      ctx.fillStyle = earBodyColor;
+      ctx.beginPath();
+      ctx.moveTo(-4, 0);
+      ctx.quadraticCurveTo(-5, -8, 0, -14);
+      ctx.quadraticCurveTo(4.5, -8, 3.5, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Velvet Interior
+      if (!isBackLayer) {
+        ctx.fillStyle = colors.underbelly || "#e4d5b7";
+        ctx.beginPath();
+        ctx.moveTo(-2.2, -1);
+        ctx.quadraticCurveTo(-2.8, -6.5, 0, -11);
+        ctx.quadraticCurveTo(2.4, -6.5, 1.8, -1);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+    } else if (id === "panda") {
+      // Ursine: Rounded, velvety black ears
+      const baseX = isBackLayer ? 15 : 25;
+      const baseY = isBackLayer ? -54 : -56;
+      const earScale = isBackLayer ? 0.90 : 1.0;
+
+      ctx.translate(baseX, baseY);
+      ctx.rotate(earRotation * 0.65);
+      ctx.scale(earScale, earScale);
+
+      ctx.fillStyle = colors.secondary || "#18181b";
+      ctx.beginPath();
+      ctx.arc(0, -6, 5.6, 0, TAU);
+      ctx.fill();
+
+      // Subtle edge sheen
+      if (!isBackLayer) {
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.arc(0, -6, 5.0, Math.PI * 0.75, Math.PI * 1.5);
+        ctx.stroke();
+      }
+
+    } else if (id === "lion") {
+      // Feline: Rounded tawny ears with black rear false-eye patch
+      const baseX = isBackLayer ? 17 : 27;
+      const baseY = isBackLayer ? -53 : -55;
+      const earScale = isBackLayer ? 0.90 : 1.0;
+
+      ctx.translate(baseX, baseY);
+      ctx.rotate(earRotation * (isBackLayer ? 0.85 : 1.0));
+      ctx.scale(earScale, earScale);
+
+      ctx.fillStyle = isBackLayer ? "#855420" : colors.body;
+      ctx.beginPath();
+      ctx.arc(0, -5, 5.2, 0, TAU);
+      ctx.fill();
+
+      // Dark rear edge
+      ctx.fillStyle = colors.secondary || "#221108";
+      ctx.beginPath();
+      ctx.arc(0, -5, 5.2, -Math.PI * 0.8, -Math.PI * 0.1);
+      ctx.lineTo(0, -5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Inner ear fluff
+      if (!isBackLayer) {
+        ctx.fillStyle = colors.underbelly || "#f3e8d2";
+        ctx.beginPath();
+        ctx.arc(0, -4.5, 3.2, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
   }
 
   /* ------------------------------------------------------------ */
@@ -377,16 +655,6 @@ export class Animal2DRenderer {
       bodyPath.bezierCurveTo(21, -37, 19, -34, 16, -32);   // throat
       bodyPath.bezierCurveTo(13, -27, 11, -25, 6, -23);    // chest/belly
       bodyPath.bezierCurveTo(-2, -19, -11, -19, -18, -23);
-      bodyPath.closePath();
-
-      // Pointed ears
-      bodyPath.moveTo(11, -53);
-      bodyPath.lineTo(14, -65);
-      bodyPath.lineTo(20, -54.5);
-      bodyPath.closePath();
-      bodyPath.moveTo(20, -54.5);
-      bodyPath.lineTo(24.5, -64.5);
-      bodyPath.lineTo(28, -54);
       bodyPath.closePath();
 
       ctx.fillStyle = colors.body;
@@ -421,12 +689,6 @@ export class Animal2DRenderer {
       bodyPath.bezierCurveTo(24, -47, 20, -38, 17, -34);   // throat
       bodyPath.bezierCurveTo(14, -28, 12, -26, 6, -24);    // chest/belly
       bodyPath.bezierCurveTo(-3, -20, -12, -20, -20, -26);
-      bodyPath.closePath();
-
-      // Elegant ears
-      bodyPath.moveTo(15, -64);
-      bodyPath.lineTo(18, -76);
-      bodyPath.lineTo(23, -65);
       bodyPath.closePath();
 
       ctx.fillStyle = colors.body;
@@ -467,12 +729,6 @@ export class Animal2DRenderer {
       bodyPath.bezierCurveTo(-2, -18, -12, -18, -21, -25);
       bodyPath.closePath();
 
-      // Round furry bear ears
-      bodyPath.moveTo(14, -54);
-      bodyPath.arc(17, -62, 5.5, 0, TAU);
-      bodyPath.moveTo(24, -55);
-      bodyPath.arc(28, -63, 5.5, 0, TAU);
-
       // White Body Base
       ctx.fillStyle = "#f4f4f5";
       ctx.fill(bodyPath);
@@ -506,10 +762,6 @@ export class Animal2DRenderer {
       bodyPath.bezierCurveTo(15, -25, 13, -23, 7, -21);
       bodyPath.bezierCurveTo(-2, -18, -12, -18, -21, -26);
       bodyPath.closePath();
-
-      // Rounded feline ears
-      bodyPath.moveTo(18, -55);
-      bodyPath.arc(21, -61, 4.8, 0, TAU);
 
       ctx.fillStyle = colors.body;
       ctx.fill(bodyPath);
@@ -558,21 +810,80 @@ export class Animal2DRenderer {
     ctx.stroke();
   }
 
-  private static renderLionMane(ctx: CanvasRenderingContext2D, animal: AnimalDefinition, time: number): void {
+  private static renderLionMane(
+    ctx: CanvasRenderingContext2D,
+    animal: AnimalDefinition,
+    time: number,
+    speed = 360
+  ): void {
     const maneColor = animal.colors.mane || "#451a03";
     ctx.fillStyle = maneColor;
 
-    // Organic wavy flowing mane around head, neck and shoulders
-    const wave = Math.sin(time * 3.5) * 1.5;
+    // Organic wavy flowing mane around head, neck and shoulders with aerodynamic trailing flow
+    const speedWave = (speed / 360) * 2.2;
+    const wave = Math.sin(time * (4.5 + speedWave * 2)) * (1.5 + speedWave);
+
     ctx.beginPath();
     ctx.ellipse(17, -46, 16 + wave * 0.5, 19, 0.35, 0, TAU);
     ctx.fill();
 
-    // Layered mane tufts catching light
+    // Layered mane tufts catching light & rippling backward in airstream
     ctx.fillStyle = "#632707";
     ctx.beginPath();
-    ctx.ellipse(14, -48, 11, 14, 0.4, 0, TAU);
+    ctx.ellipse(14 - speedWave, -48, 11, 14, 0.4, 0, TAU);
     ctx.fill();
+
+    // Trailing mane locks whipping in wind
+    ctx.strokeStyle = maneColor;
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(9, -42);
+    ctx.quadraticCurveTo(1 - speedWave * 2, -40 + wave, -4 - speedWave * 3, -36 + wave * 1.4);
+    ctx.moveTo(11, -50);
+    ctx.quadraticCurveTo(2 - speedWave * 2, -51 + wave * 0.8, -3 - speedWave * 2.5, -48 + wave * 1.2);
+    ctx.stroke();
+  }
+
+  /* ------------------------------------------------------------ */
+  /* DELICATE SNOUT WHISKERS & AIRFLOW MICRO-VIBRATION            */
+  /* ------------------------------------------------------------ */
+
+  private static renderWhiskers(
+    ctx: CanvasRenderingContext2D,
+    animal: AnimalDefinition,
+    anim: AnimalAnimParams,
+    time: number
+  ): void {
+    const { id } = animal;
+    if (id !== "fox" && id !== "moon_fox" && id !== "lion") return;
+
+    const { speed } = anim;
+    const snoutX = id === "lion" ? 44 : 39;
+    const snoutY = id === "lion" ? -42 : -41;
+
+    // High frequency micro-vibrations in airstream
+    const flutter = Math.sin(time * 36) * (0.8 + speed / 400);
+
+    ctx.save();
+    ctx.strokeStyle = id === "moon_fox" ? "rgba(186,230,253,0.7)" : "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 0.85;
+    ctx.lineCap = "round";
+
+    // 3 subtle whisker hairs curling forward & down
+    ctx.beginPath();
+    // Whisker 1 (upper)
+    ctx.moveTo(snoutX, snoutY - 1);
+    ctx.quadraticCurveTo(snoutX + 5, snoutY - 3 + flutter, snoutX + 11, snoutY - 2 + flutter * 1.2);
+    // Whisker 2 (middle)
+    ctx.moveTo(snoutX + 1, snoutY);
+    ctx.quadraticCurveTo(snoutX + 6, snoutY + flutter * 0.8, snoutX + 13, snoutY + 2 + flutter);
+    // Whisker 3 (lower)
+    ctx.moveTo(snoutX, snoutY + 1.5);
+    ctx.quadraticCurveTo(snoutX + 5, snoutY + 4 + flutter * 0.6, snoutX + 10, snoutY + 6 + flutter * 0.9);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   private static renderMoonFoxCelestialEffects(

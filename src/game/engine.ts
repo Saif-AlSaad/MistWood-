@@ -623,6 +623,9 @@ export class Engine {
           this.trailTimer = 0.04;
           this.particles.dust(this.foxX - 20, this.groundY, 2);
           this.particles.streak(this.foxX - 16, this.groundY - 12, this.speed * 0.14);
+          if (Math.random() < 0.28) {
+            this.particles.leaf(this.foxX - 12, this.groundY - 6);
+          }
         }
       } else if (this.player.ghostT > 0) {
         this.trailTimer -= dt;
@@ -837,10 +840,22 @@ export class Engine {
       f.y = f.baseY + Math.sin(this.time * 2.1 + f.phase) * 9;
     }
 
-    this.world.renderFlora(ctx, w, gy, this.scroll, this.time);
+    this.world.renderFlora(
+      ctx,
+      w,
+      gy,
+      this.scroll,
+      this.time,
+      this.foxX,
+      this.player.py,
+      this.player.grounded,
+      this.player.sliding,
+      this.speed,
+      this.player.vy
+    );
 
     if (this.state !== "menu" && this.state !== "over") {
-      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale);
+      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale, undefined, this.speed);
     }
 
     this.particles.renderFlat(ctx, pal);

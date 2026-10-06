@@ -1346,10 +1346,27 @@ export class WorldRenderer {
     }
   }
 
-  /** grass, tufts, stones, glow-shrooms — drawn over obstacle bases */
-  renderFlora(ctx: CanvasRenderingContext2D, w: number, gy: number, scroll: number, time: number): void {
+  /** grass, tufts, stones, glow-shrooms — drawn with real-time runner contact deflection & trailing elastic wake */
+  renderFlora(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    time: number,
+    playerX = 0,
+    playerPy = 0,
+    playerGrounded = true,
+    playerSliding = false,
+    speed = 360,
+    playerVy = 0
+  ): void {
     const blade = mix(this.pal.ground, [255, 255, 255], 0.09);
     const tuft = mix(this.pal.ground, [255, 255, 255], 0.15);
+
+    const isNearGround = playerGrounded || playerPy < 26;
+    const forwardSpeedScale = clamp(speed / 360, 0.65, 2.0);
+    const contactMin = playerSliding ? -45 : -32;
+    const contactMax = playerSliding ? 68 : 42;
 
     // dense fine grass — one batched path
     ctx.fillStyle = rgb(blade);
@@ -1360,8 +1377,38 @@ export class WorldRenderer {
     for (let k = 0; k < n; k++) {
       const i = i0 + k;
       const sx = i * step - scroll + hash(i, 91) * 8;
-      const hh = 7 + hash(i, 92) * 18;
-      const lean = (hash(i, 93) - 0.5) * 6 + Math.sin(time * 1.3 + i * 0.35) * 2.4;
+      let hh = 7 + hash(i, 92) * 18;
+      let lean = (hash(i, 93) - 0.5) * 6 + Math.sin(time * 1.3 + i * 0.35) * 2.4;
+
+      // Real-Time Contact Displacement & Trailing Elastic Spring Wave
+      const dx = sx - playerX;
+      if (isNearGround) {
+        if (dx >= contactMin && dx <= contactMax) {
+          // Direct footfall & body trampling: swept strongly forward in travel direction
+          const normX = dx > 0 ? 1 - dx / contactMax : 1 - Math.abs(dx / contactMin);
+          const pushAmt = (playerSliding ? 20 : 9.5) * forwardSpeedScale * normX;
+          lean += pushAmt;
+          // Vertical crushing underfoot
+          const crush = 1 - normX * (playerSliding ? 0.72 : 0.54);
+          hh *= Math.max(0.26, crush);
+        } else if (dx < contactMin && dx >= contactMin - 110) {
+          // Trailing elastic wake: blades rebound and spring back with damped harmonic oscillation
+          const distBehind = contactMin - dx;
+          const decay = Math.exp(-distBehind / 42);
+          const wakeFreq = 16 * forwardSpeedScale;
+          const wakeSpring = Math.sin(distBehind * 0.14 - time * wakeFreq) * decay;
+          lean += wakeSpring * (playerSliding ? 15 : 8.5);
+        }
+      } else if (playerPy < 120) {
+        // Airborne low pass / downwash turbulence: air displacement billows outward
+        const airDist = Math.abs(dx);
+        if (airDist < 90) {
+          const downwashScale = (1 - playerPy / 120) * (1 - airDist / 90);
+          const downwashDir = dx >= 0 ? 1 : -1;
+          lean += downwashDir * downwashScale * 6.0;
+        }
+      }
+
       ctx.moveTo(sx - 1.25, gy + 2);
       ctx.lineTo(sx + lean, gy - hh);
       ctx.lineTo(sx + 1.25, gy + 2);
@@ -1379,9 +1426,32 @@ export class WorldRenderer {
       if (hash(i, 94) < 0.3) continue;
       const bx = i * tStep - scroll + hash(i, 95) * 50;
       const blades = 3 + ((hash(i, 96) * 3) | 0);
+      const dx = bx - playerX;
+
+      let tuftPush = 0;
+      let tuftCrush = 1.0;
+      if (isNearGround) {
+        if (dx >= contactMin && dx <= contactMax) {
+          const normX = dx > 0 ? 1 - dx / contactMax : 1 - Math.abs(dx / contactMin);
+          tuftPush = (playerSliding ? 26 : 13.5) * forwardSpeedScale * normX;
+          tuftCrush = Math.max(0.32, 1 - normX * (playerSliding ? 0.68 : 0.48));
+        } else if (dx < contactMin && dx >= contactMin - 120) {
+          const distBehind = contactMin - dx;
+          const decay = Math.exp(-distBehind / 46);
+          const wakeFreq = 15 * forwardSpeedScale;
+          tuftPush = Math.sin(distBehind * 0.13 - time * wakeFreq) * decay * (playerSliding ? 18 : 10.5);
+        }
+      } else if (playerPy < 130) {
+        const airDist = Math.abs(dx);
+        if (airDist < 95) {
+          const downwashScale = (1 - playerPy / 130) * (1 - airDist / 95);
+          tuftPush = (dx >= 0 ? 1 : -1) * downwashScale * 7.5;
+        }
+      }
+
       for (let b = 0; b < blades; b++) {
-        const hh = 22 + hash(i * 7 + b, 97) * 26;
-        const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6;
+        const hh = (22 + hash(i * 7 + b, 97) * 26) * tuftCrush;
+        const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6 + tuftPush;
         ctx.moveTo(bx - 2, gy + 2);
         ctx.lineTo(bx + lean, gy - hh);
         ctx.lineTo(bx + 2, gy + 2);
@@ -1389,19 +1459,43 @@ export class WorldRenderer {
     }
     ctx.fill();
 
-    // Dewdrop specular sparkles on tall grass blades
-    ctx.fillStyle = rgb(this.pal.rim, 0.55);
+    // Dewdrop specular sparkles on tall grass blades (glint and shimmer dynamically with grass displacement)
+    ctx.fillStyle = rgb(this.pal.rim, 0.65);
     for (let k = 0; k < tn; k++) {
       const i = t0 + k;
       if (hash(i, 94) < 0.3) continue;
       const bx = i * tStep - scroll + hash(i, 95) * 50;
       const blades = 3 + ((hash(i, 96) * 3) | 0);
+      const dx = bx - playerX;
+
+      let tuftPush = 0;
+      let tuftCrush = 1.0;
+      if (isNearGround) {
+        if (dx >= contactMin && dx <= contactMax) {
+          const normX = dx > 0 ? 1 - dx / contactMax : 1 - Math.abs(dx / contactMin);
+          tuftPush = (playerSliding ? 26 : 13.5) * forwardSpeedScale * normX;
+          tuftCrush = Math.max(0.32, 1 - normX * (playerSliding ? 0.68 : 0.48));
+        } else if (dx < contactMin && dx >= contactMin - 120) {
+          const distBehind = contactMin - dx;
+          const decay = Math.exp(-distBehind / 46);
+          const wakeFreq = 15 * forwardSpeedScale;
+          tuftPush = Math.sin(distBehind * 0.13 - time * wakeFreq) * decay * (playerSliding ? 18 : 10.5);
+        }
+      } else if (playerPy < 130) {
+        const airDist = Math.abs(dx);
+        if (airDist < 95) {
+          const downwashScale = (1 - playerPy / 130) * (1 - airDist / 95);
+          tuftPush = (dx >= 0 ? 1 : -1) * downwashScale * 7.5;
+        }
+      }
+
       for (let b = 0; b < blades; b++) {
         if (hash(i * 11 + b, 991) > 0.55) {
-          const hh = 22 + hash(i * 7 + b, 97) * 26;
-          const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6;
+          const hh = (22 + hash(i * 7 + b, 97) * 26) * tuftCrush;
+          const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6 + tuftPush;
+          const dewSparkle = Math.abs(tuftPush) > 2 ? 1.6 : 1.2;
           ctx.beginPath();
-          ctx.arc(bx + lean, gy - hh, 1.2, 0, TAU);
+          ctx.arc(bx + lean, gy - hh, dewSparkle, 0, TAU);
           ctx.fill();
         }
       }

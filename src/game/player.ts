@@ -204,6 +204,7 @@ export class Player {
     time: number,
     k: number,
     _legacyPelt?: FoxPelt,
+    speed = 360,
   ): void {
     const fade = this.dead ? Math.max(0, 1 - this.deadT * 1.8) : 1;
     if (fade <= 0) return;
@@ -258,7 +259,7 @@ export class Player {
     Animal2DRenderer.render(ctx, x, gy - this.py, animal, {
       time,
       runCycle: this.runT,
-      speed: this.grounded ? 360 : 0,
+      speed: this.grounded ? speed : speed * 0.85,
       isGrounded: this.grounded,
       vy: this.vy,
       isSliding: this.sliding,
