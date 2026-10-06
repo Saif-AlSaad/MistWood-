@@ -15,6 +15,7 @@ export interface AnimalAnimParams {
   scale: number;
   inspectTilt?: number; // -1 to 1 horizontal tilt during garage inspection
   inspectPitch?: number; // -1 to 1 vertical pitch during garage inspection
+  rimColor?: string; // Celestial ambient rim light color from the world
 }
 
 export class Animal2DRenderer {
@@ -103,7 +104,7 @@ export class Animal2DRenderer {
     this.renderEye(ctx, animal);
 
     // 7. SLEEK CONTOUR RIM LIGHTING
-    this.renderRimLight(ctx, animal);
+    this.renderRimLight(ctx, animal, anim);
 
     ctx.restore(); // un-bob
     ctx.restore(); // un-translate/rotate
@@ -635,13 +636,17 @@ export class Animal2DRenderer {
     ctx.fill();
   }
 
-  private static renderRimLight(ctx: CanvasRenderingContext2D, animal: AnimalDefinition): void {
+  private static renderRimLight(
+    ctx: CanvasRenderingContext2D,
+    animal: AnimalDefinition,
+    anim?: AnimalAnimParams
+  ): void {
     const { id, colors } = animal;
-    // Sleek contour highlight on back
-    ctx.strokeStyle = colors.accent;
-    ctx.lineWidth = 1.4;
+    // Sleek contour highlight on back reflecting world celestial rim lighting
+    ctx.strokeStyle = anim?.rimColor || colors.accent;
+    ctx.lineWidth = 1.6;
     ctx.lineCap = "round";
-    ctx.globalAlpha = id === "moon_fox" ? 0.75 : 0.4;
+    ctx.globalAlpha = id === "moon_fox" ? 0.85 : 0.55;
 
     ctx.beginPath();
     if (id === "deer") {

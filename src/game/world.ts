@@ -137,6 +137,8 @@ export class WorldRenderer {
   private dawnCv: HTMLCanvasElement | null = null;
   private duskCv: HTMLCanvasElement | null = null;
 
+  private mountainMask!: HTMLCanvasElement;
+  private mountainTint!: HTMLCanvasElement;
   private farMask!: HTMLCanvasElement;
   private nearMask!: HTMLCanvasElement;
   private trunkMask!: HTMLCanvasElement;
@@ -202,18 +204,40 @@ export class WorldRenderer {
   /* ---------------- one-time layer construction ---------------- */
 
   private buildStatic(): void {
+    // 1. Extreme background mountain ridge with deep DoF blur
+    const [mount, mountX] = makeCanvas(2048, 280);
+    this.mountainRidge(mountX, 2048, 280);
+    const [mountBlur, mountBlurX] = makeCanvas(2048, 280);
+    mountBlurX.filter = "blur(4.5px)";
+    mountBlurX.drawImage(mount, -2048, 0);
+    mountBlurX.drawImage(mount, 0, 0);
+    mountBlurX.drawImage(mount, 2048, 0);
+    mountBlurX.filter = "none";
+    this.mountainMask = mountBlur;
+
+    // 2. Far forest treeline ridge with soft DoF optical blur
     const [far, farX] = makeCanvas(2048, 340);
     this.ridge(farX, 2048, 340, 116, 0.44, 0.15, true);
-    this.farMask = far;
+    const [farBlur, farBlurX] = makeCanvas(2048, 340);
+    farBlurX.filter = "blur(2.2px)";
+    farBlurX.drawImage(far, -2048, 0);
+    farBlurX.drawImage(far, 0, 0);
+    farBlurX.drawImage(far, 2048, 0);
+    farBlurX.filter = "none";
+    this.farMask = farBlur;
 
+    // 3. Near crisp pine treeline
     const [near, nearX] = makeCanvas(2048, 400);
     this.ridge(nearX, 2048, 400, 52, 0.62, 0.36, false);
     this.nearMask = near;
 
+    // 4. Midground giant trunks
     const [trk, trkX] = makeCanvas(3072, 900);
     this.trunks(trkX, 3072, 900);
     this.trunkMask = trk;
 
+    const [mt] = makeCanvas(2048, 280);
+    this.mountainTint = mt;
     const [ft] = makeCanvas(2048, 340);
     this.farTint = ft;
     const [nt] = makeCanvas(2048, 400);
@@ -249,6 +273,29 @@ export class WorldRenderer {
       }
       return c;
     });
+  }
+
+  /**
+   * Seamless grand rolling mountain crest for extreme distant parallax layer
+   */
+  private mountainRidge(x: CanvasRenderingContext2D, w: number, h: number): void {
+    x.fillStyle = "#ffffff";
+    x.beginPath();
+    x.moveTo(0, h);
+    for (let px = 0; px <= w; px += 4) {
+      const u = (px / w) * TAU;
+      const my =
+        h -
+        h * 0.42 -
+        Math.sin(u * 1 + 0.5) * h * 0.22 -
+        Math.sin(u * 3 + 2.1) * h * 0.11 -
+        Math.sin(u * 7 + 4.5) * h * 0.05 -
+        Math.sin(u * 13 + 1.2) * h * 0.02;
+      x.lineTo(px, my);
+    }
+    x.lineTo(w, h);
+    x.closePath();
+    x.fill();
   }
 
   /**
@@ -782,6 +829,7 @@ export class WorldRenderer {
     if (b === this.bucket) return;
     this.bucket = b;
     this.glowIdx = Math.round(((phase % NPAL) + NPAL) % NPAL) % NPAL;
+    this.tint(this.mountainTint, this.mountainMask, mix(this.pal.skyLow, this.pal.treeFar, 0.42));
     this.tint(this.farTint, this.farMask, this.pal.treeFar);
     this.tint(this.nearTint, this.nearMask, this.pal.treeMid);
     this.tint(this.trunkTint, this.trunkMask, mix(this.pal.treeMid, this.pal.ground, 0.6));
@@ -864,7 +912,7 @@ export class WorldRenderer {
     const ax = p.sunX * w;
     const ay = p.sunY * h * 0.9;
 
-    // stars
+    // stars with twinkle
     if (p.night > 0.03) {
       ctx.save();
       for (let i = 0; i < this.stars.length; i++) {
@@ -876,22 +924,126 @@ export class WorldRenderer {
         ctx.drawImage(this.stars[i], sx + sw2, 0, sw2, 900 * sc);
       }
       ctx.restore();
+
+      // Rare ethereal shooting star / celestial spark in the deep night sky
+      const starCycle = (time * 0.16) % 10;
+      if (starCycle < 1.0) {
+        const prog = starCycle / 1.0;
+        const stX = w * 0.25 + prog * (w * 0.55);
+        const stY = h * 0.06 + prog * (h * 0.22);
+        const tLen = 60 * (1 - Math.abs(prog - 0.5) * 1.6);
+        if (tLen > 4) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = `rgba(220, 240, 255, ${(p.night * 0.7 * (1 - prog)).toFixed(3)})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(stX - tLen * 0.88, stY - tLen * 0.48);
+          ctx.lineTo(stX, stY);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
 
-    // celestial glow (sun or moon halo)
+    // Celestial glow (sun or moon halo + corona rings)
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const gr = ctx.createRadialGradient(ax, ay, 8, ax, ay, h * 0.72);
-    gr.addColorStop(0, rgb(p.sun, 0.5 * (1 - p.night * 0.45)));
-    gr.addColorStop(1, rgb(p.sun, 0));
-    ctx.fillStyle = gr;
+
+    // 1. Wide atmospheric sky diffusion
+    const wideHalo = ctx.createRadialGradient(ax, ay, 10, ax, ay, Math.max(w, h) * 0.65);
+    wideHalo.addColorStop(0, rgb(p.sun, Math.max(0, 0.42 - p.night * 0.22)));
+    wideHalo.addColorStop(0.35, rgb(p.sun, Math.max(0, 0.16 - p.night * 0.09)));
+    wideHalo.addColorStop(0.75, rgb(p.sun, Math.max(0, 0.04 - p.night * 0.02)));
+    wideHalo.addColorStop(1, rgb(p.sun, 0));
+    ctx.fillStyle = wideHalo;
     ctx.fillRect(0, 0, w, h);
-    if (p.night > 0.2) {
+
+    // 2. Focused optical corona ring (22-degree halo effect)
+    const haloRadius = Math.min(w, h) * 0.22;
+    const ringPulse = 0.94 + Math.sin(time * 0.4) * 0.06;
+    const ringGrad = ctx.createRadialGradient(
+      ax,
+      ay,
+      haloRadius * 0.85 * ringPulse,
+      ax,
+      ay,
+      haloRadius * 1.15 * ringPulse
+    );
+    ringGrad.addColorStop(0, rgb(p.accent, 0));
+    ringGrad.addColorStop(0.5, rgb(p.accent, 0.06 + (1 - p.night) * 0.04));
+    ringGrad.addColorStop(1, rgb(p.accent, 0));
+    ctx.fillStyle = ringGrad;
+    ctx.beginPath();
+    ctx.arc(ax, ay, haloRadius * 1.2 * ringPulse, 0, TAU);
+    ctx.fill();
+
+    // 3. Subtle horizontal anamorphic lens streak across celestial center
+    const streakW = Math.min(w * 0.75, 480);
+    const streakH = 3.2;
+    const streakGrad = ctx.createLinearGradient(ax - streakW, ay, ax + streakW, ay);
+    streakGrad.addColorStop(0, rgb(p.sun, 0));
+    streakGrad.addColorStop(0.35, rgb(p.sun, 0.06));
+    streakGrad.addColorStop(0.5, rgb([255, 255, 255], 0.26));
+    streakGrad.addColorStop(0.65, rgb(p.sun, 0.06));
+    streakGrad.addColorStop(1, rgb(p.sun, 0));
+    ctx.fillStyle = streakGrad;
+    ctx.fillRect(ax - streakW, ay - streakH / 2, streakW * 2, streakH);
+
+    // 4. Celestial Orb: Sun Disc vs Detailed Moon
+    if (p.night < 0.65) {
+      // Golden Sun disc with limb glow
+      const sunRad = 28 * (1 - p.night * 0.35);
+      const sunDisc = ctx.createRadialGradient(ax, ay, 0, ax, ay, sunRad);
+      sunDisc.addColorStop(0, "#ffffff");
+      sunDisc.addColorStop(0.45, rgb(p.sun, 0.95));
+      sunDisc.addColorStop(0.85, rgb(p.sun, 0.4));
+      sunDisc.addColorStop(1, rgb(p.sun, 0));
+      ctx.fillStyle = sunDisc;
+      ctx.beginPath();
+      ctx.arc(ax, ay, sunRad, 0, TAU);
+      ctx.fill();
+    }
+
+    if (p.night > 0.15) {
+      // High-detail luminous moon disc with soft craters and moon halo
       ctx.globalAlpha = p.night;
-      ctx.drawImage(this.moonSprite, ax - 60, ay - 60, 120, 120);
+      this.drawDetailedMoon(ctx, ax, ay, 44);
       ctx.globalAlpha = 1;
     }
+
     ctx.restore();
+  }
+
+  private drawDetailedMoon(ctx: CanvasRenderingContext2D, mx: number, my: number, rad: number): void {
+    // Outer soft moon corona
+    const moonGlow = ctx.createRadialGradient(mx, my, rad * 0.5, mx, my, rad * 2.8);
+    moonGlow.addColorStop(0, "rgba(215, 238, 255, 0.55)");
+    moonGlow.addColorStop(0.4, "rgba(165, 210, 255, 0.2)");
+    moonGlow.addColorStop(1, "rgba(120, 180, 255, 0)");
+    ctx.fillStyle = moonGlow;
+    ctx.beginPath();
+    ctx.arc(mx, my, rad * 2.8, 0, TAU);
+    ctx.fill();
+
+    // Lunar body disc
+    const moonBody = ctx.createRadialGradient(mx - rad * 0.25, my - rad * 0.25, 0, mx, my, rad);
+    moonBody.addColorStop(0, "#ffffff");
+    moonBody.addColorStop(0.7, "#dbeafe");
+    moonBody.addColorStop(1, "#93c5fd");
+    ctx.fillStyle = moonBody;
+    ctx.beginPath();
+    ctx.arc(mx, my, rad, 0, TAU);
+    ctx.fill();
+
+    // Lunar mare maria (dark basalt plains on moon)
+    ctx.fillStyle = "rgba(70, 95, 140, 0.22)";
+    ctx.beginPath();
+    ctx.arc(mx - rad * 0.22, my - rad * 0.15, rad * 0.32, 0, TAU);
+    ctx.arc(mx + rad * 0.18, my - rad * 0.22, rad * 0.24, 0, TAU);
+    ctx.arc(mx + rad * 0.08, my + rad * 0.25, rad * 0.36, 0, TAU);
+    ctx.arc(mx - rad * 0.32, my + rad * 0.12, rad * 0.2, 0, TAU);
+    ctx.fill();
   }
 
   private drawCover(
@@ -908,31 +1060,84 @@ export class WorldRenderer {
 
   /** distant forest silhouettes dissolving into fog */
   renderTreelines(
-    ctx: CanvasRenderingContext2D, w: number, h: number, gy: number, scroll: number,
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    gy: number,
+    scroll: number,
+    time = 0,
   ): void {
-    const sF = (h * 0.3) / 340;
+    // 1. Extreme background mountain ridge (0.025x parallax, deep atmospheric haze)
+    const sM = (h * 0.3) / 280;
+    const wM = 2048 * sM;
+    const yM = gy + 32 - h * 0.3;
+    let offM = -((scroll * 0.025) % wM);
+    ctx.globalAlpha = 0.52;
+    for (; offM < w; offM += wM) ctx.drawImage(this.mountainTint, offM, yM, wM, h * 0.3);
+    ctx.globalAlpha = 1;
+
+    // 2. Far forest treeline (0.06x parallax, out-of-focus DoF blur)
+    const sF = (h * 0.32) / 340;
     const wF = 2048 * sF;
-    const yF = gy + 26 - h * 0.3;
+    const yF = gy + 26 - h * 0.32;
     let off = -((scroll * 0.06) % wF);
-    ctx.globalAlpha = 0.8;
-    for (; off < w; off += wF) ctx.drawImage(this.farTint, off, yF, wF, h * 0.3);
+    ctx.globalAlpha = 0.78;
+    for (; off < w; off += wF) ctx.drawImage(this.farTint, off, yF, wF, h * 0.32);
     ctx.globalAlpha = 1;
 
-    // horizontal fog band swallowing the horizon
-    const fg = ctx.createLinearGradient(0, gy - 95, 0, gy + 40);
-    fg.addColorStop(0, rgb(this.pal.fog, 0));
-    fg.addColorStop(0.55, rgb(this.pal.fog, 0.5));
-    fg.addColorStop(1, rgb(this.pal.fog, 0));
-    ctx.fillStyle = fg;
-    ctx.fillRect(0, gy - 95, w, 135);
+    // 3. Volumetric undulating ground mist ribbons between far and near treeline
+    this.renderVolumetricMist(ctx, w, gy, scroll, time);
 
-    const sN = (h * 0.37) / 400;
+    // 4. Near crisp pine treeline (0.13x parallax)
+    const sN = (h * 0.38) / 400;
     const wN = 2048 * sN;
-    const yN = gy + 18 - h * 0.37;
+    const yN = gy + 18 - h * 0.38;
     off = -((scroll * 0.13) % wN);
-    ctx.globalAlpha = 0.94;
-    for (; off < w; off += wN) ctx.drawImage(this.nearTint, off, yN, wN, h * 0.37);
+    ctx.globalAlpha = 0.95;
+    for (; off < w; off += wN) ctx.drawImage(this.nearTint, off, yN, wN, h * 0.38);
     ctx.globalAlpha = 1;
+  }
+
+  /** Animated rolling volumetric ground mist with wave offsets */
+  private renderVolumetricMist(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    time: number,
+  ): void {
+    const p = this.pal;
+    const mistColor = p.fog;
+
+    // Deep broad horizon mist band
+    const fg = ctx.createLinearGradient(0, gy - 110, 0, gy + 35);
+    fg.addColorStop(0, rgb(mistColor, 0));
+    fg.addColorStop(0.35, rgb(mistColor, 0.42));
+    fg.addColorStop(0.7, rgb(mistColor, 0.32));
+    fg.addColorStop(1, rgb(mistColor, 0));
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, gy - 110, w, 145);
+
+    // Rolling undulating mist ribbon with organic sine ripples
+    ctx.save();
+    ctx.fillStyle = rgb(mistColor, 0.24 + (1 - p.night) * 0.08);
+    ctx.beginPath();
+    ctx.moveTo(0, gy + 20);
+    const step = 28;
+    for (let x = 0; x <= w + step; x += step) {
+      const u = x * 0.0045 + scroll * 0.001;
+      const my =
+        gy - 55 +
+        Math.sin(u * 3 + time * 0.4) * 16 +
+        Math.cos(u * 7 - time * 0.6) * 9 +
+        Math.sin(u * 13 + time * 0.9) * 4;
+      ctx.lineTo(x, my);
+    }
+    ctx.lineTo(w + step, gy + 30);
+    ctx.lineTo(0, gy + 30);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /** giant mid-ground trunks sweeping past */
@@ -946,38 +1151,105 @@ export class WorldRenderer {
     ctx.globalAlpha = 1;
   }
 
-  /** rotating volumetric god rays from the celestial anchor */
+  /** rotating volumetric god rays from the celestial anchor with canopy swaying shafts */
   renderRays(ctx: CanvasRenderingContext2D, w: number, h: number, time: number): void {
     const p = this.pal;
-    const strength = 1 - p.night * 0.72;
-    if (strength < 0.05) return;
+    const isNight = p.night > 0.35;
+    const dayStrength = Math.max(0, 1 - p.night * 0.95);
+    const nightStrength = p.night * 0.65;
+    const totalStrength = dayStrength + nightStrength;
+    if (totalStrength < 0.04) return;
+
     const ax = p.sunX * w;
     const ay = p.sunY * h * 0.9;
-    const len = h * 1.4;
+    const rayLength = Math.hypot(w, h) * 1.35;
+
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < 6; i++) {
-      const a = 1.95 + i * 0.17 + Math.sin(time * 0.05 + i * 1.7) * 0.06;
-      const wide = 0.03 + hash(i, 81) * 0.05;
-      const pulse = 0.6 + 0.4 * Math.sin(time * 0.11 + i * 2.3);
-      ctx.fillStyle = rgb(p.ray, 0.045 * strength * pulse + 0.02 * strength);
+
+    // Palette-informed ray tint: day uses warm amber p.ray, night uses ethereal cyan/ice-blue
+    const rayColor: RGB = isNight
+      ? mix([145, 210, 255], [195, 235, 255], 0.4)
+      : p.ray;
+    const baseAlpha = isNight ? 0.038 * nightStrength : 0.052 * dayStrength;
+
+    // Cluster of 8 volumetric shafts with varying widths, angles, and gentle canopy sway
+    const rayCount = 8;
+    for (let i = 0; i < rayCount; i++) {
+      const baseAngle = 1.82 + i * 0.14;
+      const sway = Math.sin(time * 0.07 + i * 1.5) * 0.045 + Math.sin(time * 0.19 + i * 2.8) * 0.02;
+      const angle = baseAngle + sway;
+      const width = (0.025 + hash(i, 81) * 0.04) * (1 + Math.sin(time * 0.13 + i) * 0.15);
+      const intensity = 0.6 + 0.4 * Math.sin(time * 0.22 + i * 2.1) + 0.15 * Math.sin(time * 0.5 + i * 3.4);
+
+      // Gradient along the ray: faint near sky origin, swelling in canopy, feathering out near ground
+      const startDist = 30;
+      const p1x = ax + Math.cos(angle) * startDist;
+      const p1y = ay + Math.sin(angle) * startDist;
+      const p2x = ax + Math.cos(angle) * rayLength;
+      const p2y = ay + Math.sin(angle) * rayLength;
+
+      const grad = ctx.createLinearGradient(p1x, p1y, p2x, p2y);
+      const a = baseAlpha * intensity;
+      grad.addColorStop(0, rgb(rayColor, a * 0.2));
+      grad.addColorStop(0.18, rgb(rayColor, a * 1.2));
+      grad.addColorStop(0.55, rgb(rayColor, a * 0.8));
+      grad.addColorStop(0.88, rgb(rayColor, a * 0.3));
+      grad.addColorStop(1, rgb(rayColor, 0));
+
+      ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.moveTo(ax, ay);
-      ctx.lineTo(ax + Math.cos(a - wide) * len, ay + Math.sin(a - wide) * len);
-      ctx.lineTo(ax + Math.cos(a + wide) * len, ay + Math.sin(a + wide) * len);
+      ctx.lineTo(ax + Math.cos(angle - width) * rayLength, ay + Math.sin(angle - width) * rayLength);
+      ctx.lineTo(ax + Math.cos(angle + width) * rayLength, ay + Math.sin(angle + width) * rayLength);
       ctx.closePath();
       ctx.fill();
     }
+
+    // Floating sun/moon dust motes that drift along light beams
+    this.renderRayDustMotes(ctx, ax, ay, rayColor, totalStrength, time);
+
     ctx.restore();
+  }
+
+  private renderRayDustMotes(
+    ctx: CanvasRenderingContext2D,
+    ax: number,
+    ay: number,
+    color: RGB,
+    strength: number,
+    time: number,
+  ): void {
+    const n = 28;
+    for (let i = 0; i < n; i++) {
+      const angle = 1.82 + hash(i, 801) * 1.1;
+      const dist = 120 + hash(i, 802) * 650;
+      const drift = Math.sin(time * 0.4 + i * 1.7) * 18;
+      const mx = ax + Math.cos(angle) * dist + drift;
+      const my = ay + Math.sin(angle) * dist + (time * 14 + i * 45) % 300;
+      const twinkle = 0.3 + 0.7 * Math.sin(time * 2.2 + i * 3.1);
+      const sz = 1.2 + hash(i, 803) * 1.8;
+      ctx.fillStyle = rgb(color, 0.18 * strength * twinkle);
+      ctx.beginPath();
+      ctx.arc(mx, my, sz, 0, TAU);
+      ctx.fill();
+    }
   }
 
   /* ---------------- ground & decor ---------------- */
 
-  renderGroundFill(ctx: CanvasRenderingContext2D, w: number, h: number, gy: number): void {
+  renderGroundFill(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    gy: number,
+    scroll = 0,
+    time = 0,
+  ): void {
     const p = this.pal;
     const depth = h - gy;
 
-    // Stratified organic earth gradient: top loam -> deep subsoil -> bedrock
+    // 1. Stratified organic earth gradient: top loam -> deep subsoil -> bedrock
     const soilGrad = ctx.createLinearGradient(0, gy, 0, h);
     soilGrad.addColorStop(0, rgb(p.ground));
     soilGrad.addColorStop(0.18, rgb(mix(p.ground, [24, 18, 14], 0.45)));
@@ -986,17 +1258,92 @@ export class WorldRenderer {
     ctx.fillStyle = soilGrad;
     ctx.fillRect(0, gy, w, depth);
 
-    // Surface mossy edge rim glow
+    // 2. Reflective glassy water puddle patches along the forest trail
+    this.renderPuddles(ctx, w, gy, scroll, time);
+
+    // 3. Dynamic surface rim glow (peaks under sun/moon horizontal position)
+    const sunXpx = p.sunX * w;
     const sheen = ctx.createLinearGradient(0, gy - 1, 0, gy + 32);
-    sheen.addColorStop(0, rgb(p.rim, 0.28));
-    sheen.addColorStop(0.35, rgb(p.rim, 0.08));
+    sheen.addColorStop(0, rgb(p.rim, 0.32));
+    sheen.addColorStop(0.35, rgb(p.rim, 0.09));
     sheen.addColorStop(1, rgb(p.rim, 0));
     ctx.fillStyle = sheen;
     ctx.fillRect(0, gy - 1, w, 33);
 
+    // Celestial directional rim light highlight directly beneath sun/moon
+    const celRim = ctx.createRadialGradient(sunXpx, gy, 2, sunXpx, gy, w * 0.45);
+    celRim.addColorStop(0, rgb(p.rim, 0.35));
+    celRim.addColorStop(0.5, rgb(p.rim, 0.1));
+    celRim.addColorStop(1, rgb(p.rim, 0));
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = celRim;
+    ctx.fillRect(0, gy - 1, w, 24);
+    ctx.restore();
+
     // Sharp top turf contact line
-    ctx.fillStyle = rgb(p.rim, 0.35);
+    ctx.fillStyle = rgb(p.rim, 0.42);
     ctx.fillRect(0, gy - 0.5, w, 1.2);
+  }
+
+  /** Glassy water puddles reflecting the sky and silhouetted forest canopy */
+  private renderPuddles(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    time: number,
+  ): void {
+    const p = this.pal;
+    const puddleStep = 580;
+    const p0 = Math.floor(scroll / puddleStep) - 1;
+    const pn = Math.ceil(w / puddleStep) + 2;
+
+    for (let k = 0; k < pn; k++) {
+      const idx = p0 + k;
+      const hval = hash(idx, 901);
+      if (hval < 0.32) continue; // some segments have no puddles
+
+      const px = idx * puddleStep - scroll + hash(idx, 902) * 220;
+      const pw = 48 + hash(idx, 903) * 75;
+      const ph = 5.5 + hash(idx, 904) * 4.5;
+      const py = gy + 1.2 + hash(idx, 905) * 3;
+
+      if (px + pw < -50 || px - pw > w + 50) continue;
+
+      // Dark wet mud depression basin
+      ctx.fillStyle = "rgba(4, 5, 8, 0.65)";
+      ctx.beginPath();
+      ctx.ellipse(px, py, pw * 0.54, ph * 1.3, 0, 0, TAU);
+      ctx.fill();
+
+      // Mirror reflection gradient of the sky colors
+      const waterGrad = ctx.createLinearGradient(px, py - ph, px, py + ph);
+      waterGrad.addColorStop(0, rgb(mix(p.skyLow, [255, 255, 255], 0.2), 0.55));
+      waterGrad.addColorStop(0.5, rgb(p.skyTop, 0.45));
+      waterGrad.addColorStop(1, rgb(p.ground, 0.8));
+
+      ctx.fillStyle = waterGrad;
+      ctx.beginPath();
+      ctx.ellipse(px, py, pw * 0.48, ph, 0, 0, TAU);
+      ctx.fill();
+
+      // Subtle water ripple ring
+      const ripplePhase = (time * 1.8 + hash(idx, 906) * 10) % 1;
+      const rippleR = pw * 0.45 * ripplePhase;
+      const rippleAlpha = (1 - ripplePhase) * 0.28;
+      ctx.strokeStyle = rgb(p.rim, rippleAlpha);
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(px, py, rippleR, ph * ripplePhase, 0, 0, TAU);
+      ctx.stroke();
+
+      // Specular glint on puddle edge
+      ctx.fillStyle = rgb(p.rim, 0.5);
+      ctx.beginPath();
+      ctx.arc(px - pw * 0.32, py - ph * 0.35, 1.2, 0, TAU);
+      ctx.fill();
+    }
   }
 
   /** grass, tufts, stones, glow-shrooms — drawn over obstacle bases */
@@ -1042,6 +1389,24 @@ export class WorldRenderer {
     }
     ctx.fill();
 
+    // Dewdrop specular sparkles on tall grass blades
+    ctx.fillStyle = rgb(this.pal.rim, 0.55);
+    for (let k = 0; k < tn; k++) {
+      const i = t0 + k;
+      if (hash(i, 94) < 0.3) continue;
+      const bx = i * tStep - scroll + hash(i, 95) * 50;
+      const blades = 3 + ((hash(i, 96) * 3) | 0);
+      for (let b = 0; b < blades; b++) {
+        if (hash(i * 11 + b, 991) > 0.55) {
+          const hh = 22 + hash(i * 7 + b, 97) * 26;
+          const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6;
+          ctx.beginPath();
+          ctx.arc(bx + lean, gy - hh, 1.2, 0, TAU);
+          ctx.fill();
+        }
+      }
+    }
+
     // stones + glowing mushrooms
     const sStep = 173;
     const s0 = Math.floor(scroll / sStep) - 1;
@@ -1067,6 +1432,20 @@ export class WorldRenderer {
         ctx.beginPath();
         ctx.ellipse(sx, gy - mh, 4.5, 2.8, 0, Math.PI, 0);
         ctx.fill();
+
+        // Soft bioluminescent glow aura around mushroom cap
+        if (this.pal.night > 0.05) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          const mshGlow = ctx.createRadialGradient(sx, gy - mh, 1, sx, gy - mh, 16);
+          mshGlow.addColorStop(0, rgb(this.pal.accent, 0.35 * this.pal.night));
+          mshGlow.addColorStop(1, rgb(this.pal.accent, 0));
+          ctx.fillStyle = mshGlow;
+          ctx.beginPath();
+          ctx.arc(sx, gy - mh, 16, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
   }
@@ -1432,49 +1811,114 @@ export class WorldRenderer {
 
   /* ---------------- pickups ---------------- */
 
-  renderFly(ctx: CanvasRenderingContext2D, f: Fly, time: number): void {
+  renderFly(ctx: CanvasRenderingContext2D, f: Fly, time: number, gy = 0): void {
     const y = f.baseY + Math.sin(time * 2.1 + f.phase) * 9;
     f.y = y;
     const pulse = 0.75 + Math.sin(time * 3.2 + f.phase) * 0.25;
     const glow = this.glowSprites[this.glowIdx];
-    const s = 30 * pulse * (0.8 + this.pal.night * 0.4);
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(glow, f.x - s / 2, y - s / 2, s, s);
-    ctx.fillStyle = rgb(this.pal.mote, 0.95);
-    ctx.beginPath();
-    ctx.arc(f.x, y, 1.7, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-  }
+    const s = 34 * pulse * (0.8 + this.pal.night * 0.4);
 
-  renderBloom(ctx: CanvasRenderingContext2D, b: { x: number; y: number; phase: number }, time: number): void {
-    const p = this.pal;
-    const pulse = 0.85 + Math.sin(time * 2.4 + b.phase) * 0.15;
-    ctx.save();
-    ctx.translate(b.x, b.y + Math.sin(time * 1.6 + b.phase) * 10);
-    ctx.globalCompositeOperation = "lighter";
-    const glow = this.glowSprites[(this.glowIdx + 2) % NPAL];
-    const s = 90 * pulse;
-    ctx.drawImage(glow, -s / 2, -s / 2, s, s);
-    ctx.restore();
-
-    ctx.save();
-    ctx.translate(b.x, b.y + Math.sin(time * 1.6 + b.phase) * 10);
-    ctx.rotate(time * 0.6);
-    ctx.fillStyle = rgb(p.rim, 0.9);
-    for (let i = 0; i < 5; i++) {
+    // 1. Soft downward light cast on ground when near forest floor
+    if (gy > 0 && Math.abs(y - gy) < 85) {
+      const distToGround = Math.max(10, Math.abs(y - gy));
+      const castAlpha = (1 - distToGround / 85) * 0.28 * pulse;
+      const castW = 28 + (1 - distToGround / 85) * 22;
       ctx.save();
-      ctx.rotate((i / 5) * TAU);
+      ctx.globalCompositeOperation = "lighter";
+      const groundGlow = ctx.createRadialGradient(f.x, gy, 1, f.x, gy, castW);
+      groundGlow.addColorStop(0, rgb(this.pal.accent, castAlpha));
+      groundGlow.addColorStop(1, rgb(this.pal.accent, 0));
+      ctx.fillStyle = groundGlow;
       ctx.beginPath();
-      ctx.ellipse(0, -9 * pulse, 4.6 * pulse, 8.5 * pulse, 0, 0, TAU);
+      ctx.ellipse(f.x, gy, castW, 6, 0, 0, TAU);
       ctx.fill();
       ctx.restore();
     }
-    ctx.fillStyle = "#fff6dd";
+
+    // 2. Additive outer celestial halo
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.drawImage(glow, f.x - s / 2, y - s / 2, s, s);
+
+    // 3. Secondary tight inner corona
+    const innerS = s * 0.45;
+    ctx.drawImage(this.softDot, f.x - innerS / 2, y - innerS / 2, innerS, innerS);
+
+    // 4. Brilliant hot plasma core
+    ctx.fillStyle = "#ffffff";
     ctx.beginPath();
-    ctx.arc(0, 0, 3.4 * pulse, 0, TAU);
+    ctx.arc(f.x, y, 1.4, 0, TAU);
     ctx.fill();
+
+    ctx.restore();
+  }
+
+  renderBloom(ctx: CanvasRenderingContext2D, b: { x: number; y: number; phase: number }, time: number, gy = 0): void {
+    const p = this.pal;
+    const pulse = 0.85 + Math.sin(time * 2.4 + b.phase) * 0.15;
+    const by = b.y + Math.sin(time * 1.6 + b.phase) * 10;
+
+    // 1. Ground illumination circle underneath the bloom
+    if (gy > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const groundBeam = ctx.createRadialGradient(b.x, gy, 4, b.x, gy, 70);
+      groundBeam.addColorStop(0, rgb(p.accent, 0.45 * pulse));
+      groundBeam.addColorStop(0.5, rgb(p.accent, 0.18 * pulse));
+      groundBeam.addColorStop(1, rgb(p.accent, 0));
+      ctx.fillStyle = groundBeam;
+      ctx.beginPath();
+      ctx.ellipse(b.x, gy, 70, 14, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 2. Vertical sacred spirit pillar beam
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const beamGrad = ctx.createLinearGradient(b.x, by - 120, b.x, by + 40);
+    beamGrad.addColorStop(0, rgb(p.accent, 0));
+    beamGrad.addColorStop(0.5, rgb(p.accent, 0.22 * pulse));
+    beamGrad.addColorStop(1, rgb(p.accent, 0));
+    ctx.fillStyle = beamGrad;
+    ctx.fillRect(b.x - 14, by - 120, 28, 160);
+
+    // 3. Expanding ethereal spirit pulse rings
+    const ringCycle = (time * 0.8 + b.phase) % 1;
+    const ringR = 25 + ringCycle * 55;
+    const ringA = (1 - ringCycle) * 0.35;
+    ctx.strokeStyle = rgb(p.accent, ringA);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(b.x, by, ringR, 0, TAU);
+    ctx.stroke();
+
+    // 4. Outer radiant corona
+    const glow = this.glowSprites[(this.glowIdx + 2) % NPAL];
+    const s = 110 * pulse;
+    ctx.drawImage(glow, b.x - s / 2, by - s / 2, s, s);
+
+    // 5. Rotating sacred spirit petals
+    ctx.save();
+    ctx.translate(b.x, by);
+    ctx.rotate(time * 0.65);
+    ctx.fillStyle = rgb(p.rim, 0.92);
+    for (let i = 0; i < 6; i++) {
+      ctx.save();
+      ctx.rotate((i / 6) * TAU);
+      ctx.beginPath();
+      ctx.ellipse(0, -10 * pulse, 5.2 * pulse, 9.8 * pulse, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Brilliant starburst core
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.2 * pulse, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
     ctx.restore();
   }
 
@@ -1514,7 +1958,7 @@ export class WorldRenderer {
     const col = this.softDot;
     for (const m of this.motes) {
       const tw = 0.5 + 0.5 * Math.sin(time * 1.5 + m.ph);
-      ctx.globalAlpha = (0.1 + tw * 0.22) * (0.6 + this.pal.night * 0.7);
+      ctx.globalAlpha = (0.12 + tw * 0.24) * (0.6 + this.pal.night * 0.7);
       const s = m.r * 7;
       ctx.drawImage(col, m.x - s / 2, m.y - s / 2, s, s);
     }

@@ -244,6 +244,7 @@ export class Player {
       squash: this.squash,
       stretch: this.stretch,
       scale: k,
+      rimColor: rgb(pal.rim, 0.75),
     });
     ctx.restore();
   }

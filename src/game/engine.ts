@@ -468,6 +468,7 @@ export class Engine {
         ? this.time * 0.018
         : this.dist / 600;
     this.world.setPhase(phase);
+    this.world.updateAmbient(dt, this.w, this.h, this.time);
 
     // auto-drag in menu / slow-decay when dying
     if (!playing && !dying) {
@@ -764,12 +765,12 @@ export class Engine {
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    this.world.renderTreelines(ctx, w, h, gy, this.scroll);
+    this.world.renderTreelines(ctx, w, h, gy, this.scroll, this.time);
     this.world.renderTrunks(ctx, w, h, this.scroll);
     this.world.renderRays(ctx, w, h, this.time);
 
     // ---- gameplay plane ----
-    this.world.renderGroundFill(ctx, w, h, gy);
+    this.world.renderGroundFill(ctx, w, h, gy, this.scroll, this.time);
 
     for (const ob of this.obstacles) {
       const sx = ob.x - this.scroll;
@@ -784,14 +785,14 @@ export class Engine {
     if (this.bloom) {
       const sx = this.bloom.x - this.scroll;
       if (sx > -80 && sx < w + 80) {
-        this.world.renderBloom(ctx, { x: sx, y: this.bloom.y, phase: this.bloom.phase }, this.time);
+        this.world.renderBloom(ctx, { x: sx, y: this.bloom.y, phase: this.bloom.phase }, this.time, gy);
       }
     }
 
     for (const f of this.flies) {
       const sx = f.x - this.scroll;
       if (sx < -40 || sx > w + 40) continue;
-      this.world.renderFly(ctx, { ...f, x: sx } as Fly, this.time);
+      this.world.renderFly(ctx, { ...f, x: sx } as Fly, this.time, gy);
       // keep world-space hover sync
       f.y = f.baseY + Math.sin(this.time * 2.1 + f.phase) * 9;
     }
