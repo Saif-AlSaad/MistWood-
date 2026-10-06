@@ -16,6 +16,7 @@ export interface AnimalAnimParams {
   inspectTilt?: number; // -1 to 1 horizontal tilt during garage inspection
   inspectPitch?: number; // -1 to 1 vertical pitch during garage inspection
   rimColor?: string; // Celestial ambient rim light color from the world
+  flipRotation?: number; // Double jump acrobatic front-flip rotation
 }
 
 export class Animal2DRenderer {
@@ -40,15 +41,16 @@ export class Animal2DRenderer {
       scale,
       inspectTilt = 0,
       inspectPitch = 0,
+      flipRotation = 0,
     } = anim;
 
     ctx.save();
     ctx.translate(x, y);
 
-    // Dynamic lean & inspection tilt
+    // Dynamic lean, acrobatic flips & inspection tilt
     const runningLean = isGrounded && speed > 20 ? 0.05 : 0;
     const inAirPitch = !isGrounded ? clamp(-vy * 0.00024, -0.25, 0.28) : 0;
-    const totalRotation = runningLean + inAirPitch + inspectPitch * 0.15;
+    const totalRotation = runningLean + inAirPitch + inspectPitch * 0.15 + flipRotation;
     ctx.rotate(totalRotation);
 
     // Squash & stretch deformation

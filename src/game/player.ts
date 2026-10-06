@@ -6,7 +6,13 @@ import { Animal2DRenderer } from "./Animal2D";
 import type { FoxPelt, Palette } from "./types";
 import { rgb, clamp, TAU } from "./types";
 
-type PlayerEvent = "jump" | "dbl" | "land";
+export type PlayerEvent = "jump" | "dbl" | "land";
+
+export interface LandingInfo {
+  impactVy: number;
+  hardLanding: boolean;
+  fastFallLanding: boolean;
+}
 
 export class Player {
   /** Height above ground, in px */
@@ -20,6 +26,7 @@ export class Player {
   dead = false;
   deadT = 0;
   runT = 0;
+  flipT = 0; // Double jump acrobatic front-flip timer
 
   animal: AnimalDefinition = ANIMALS.fox;
 
@@ -31,7 +38,7 @@ export class Player {
   private stepT = 0;
   private currentLean = 0;
 
-  constructor(private onEvent: (e: PlayerEvent) => void) {}
+  constructor(private onEvent: (e: PlayerEvent, info?: LandingInfo) => void) {}
 
   setAnimal(animal: AnimalDefinition): void {
     this.animal = animal;
@@ -48,6 +55,7 @@ export class Player {
     this.dead = false;
     this.deadT = 0;
     this.runT = 0;
+    this.flipT = 0;
     this.coyote = 0;
     this.buf = 0;
     this.squash = 0;
@@ -111,6 +119,9 @@ export class Player {
     // Physical recovery from landing squash and takeoff stretch
     this.squash = Math.max(0, this.squash - dt * phys.landingRecovery);
     this.stretch = Math.max(0, this.stretch - dt * 5.5);
+    if (this.flipT > 0) {
+      this.flipT = Math.max(0, this.flipT - dt);
+    }
 
     // Dynamic jump takeoff with animal jumpForce profile
     if (this.buf > 0) {
@@ -127,28 +138,37 @@ export class Player {
         this.buf = 0;
         this.jumps = 2;
         this.stretch = 0.85;
+        this.flipT = 0.38; // 380ms acrobatic front flip
         this.onEvent("dbl");
       }
     }
 
-    // Realistic vertical ballistics & gravity
+    // Realistic vertical ballistics, acrobatic apex float & gravity
     if (!this.grounded) {
       const baseGravity = 2100;
-      const g = baseGravity * phys.gravityMultiplier * (this.fastFall ? 2.5 : 1.0);
-      this.vy = Math.max(this.vy - g * dt, -1550);
+      // Apex Float & Hang-time: gravity is cut in half when near arc zenith (|vy| < 130)
+      const isApex = Math.abs(this.vy) < 130 && !this.fastFall;
+      const apexDampener = isApex ? 0.48 : 1.0;
+      const g = baseGravity * phys.gravityMultiplier * (this.fastFall ? 2.4 : apexDampener);
+      const impactVy = -this.vy;
+      this.vy = Math.max(this.vy - g * dt, -1650);
       this.py += this.vy * dt;
 
       // Realistic ground impact
       if (this.py <= 0) {
         this.py = 0;
+        const hardLanding = impactVy > 620;
+        const fastFallLanding = this.fastFall;
         this.vy = 0;
         this.grounded = true;
         this.fastFall = false;
         this.jumps = 0;
-        this.coyote = 0.09;
-        // Compression proportional to animal mass
-        this.squash = Math.min(1.4, phys.landingSquash * (phys.mass / 20));
-        this.onEvent("land");
+        this.flipT = 0;
+        this.coyote = 0.11;
+        // Compression proportional to animal mass AND impact velocity
+        const impactFactor = clamp(impactVy / 600, 0.6, 2.2);
+        this.squash = Math.min(1.5, phys.landingSquash * (phys.mass / 20) * impactFactor);
+        this.onEvent("land", { impactVy, hardLanding, fastFallLanding });
       }
     } else {
       this.py = 0;
@@ -232,6 +252,7 @@ export class Player {
     }
 
     // Masterclass 2D Animal Model Rendering
+    const flipRotation = this.flipT > 0 ? (1 - this.flipT / 0.38) * Math.PI * 2 : 0;
     ctx.save();
     ctx.globalAlpha = (this.ghostT > 0 ? 0.72 : (id === "moon_fox" ? 0.95 : 1)) * fade;
     Animal2DRenderer.render(ctx, x, gy - this.py, animal, {
@@ -245,6 +266,7 @@ export class Player {
       stretch: this.stretch,
       scale: k,
       rimColor: rgb(pal.rim, 0.75),
+      flipRotation,
     });
     ctx.restore();
   }

@@ -2,10 +2,10 @@
 
 import { AudioEngine } from "./audio";
 import { Particles } from "./particles";
-import { Player } from "./player";
+import { Player, type LandingInfo } from "./player";
 import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
 import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
-import { DEFAULT_SETTINGS, FOX_PELTS, clamp, rand, speedToKmh } from "./types";
+import { DEFAULT_SETTINGS, FOX_PELTS, clamp, lerp, rand, speedToKmh } from "./types";
 import type { AnimalDefinition } from "./animals";
 import { ANIMALS, mapLegacyPeltId } from "./animals";
 
@@ -68,6 +68,9 @@ export class Engine {
   private speedStreakTimer = 0;
   private cameraZoom = 1;
   private cameraY = 0;
+  private cameraTilt = 0;
+  private cameraBounceY = 0;
+  private hitStopTimer = 0;
   private reduced = false;
   private disposed = false;
   private startGraceTime = 0;
@@ -80,7 +83,7 @@ export class Engine {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
     this.cb = cb;
-    this.player = new Player((e) => this.onPlayerEvent(e));
+    this.player = new Player((e, info) => this.onPlayerEvent(e, info));
     this.best = Number(localStorage.getItem(BEST_KEY) ?? 0) || 0;
     this.reduced =
       typeof matchMedia !== "undefined" &&
@@ -161,6 +164,9 @@ export class Engine {
     this.maxSpeedReached = 340;
     this.cameraZoom = 1;
     this.cameraY = 0;
+    this.cameraTilt = 0;
+    this.cameraBounceY = 0;
+    this.hitStopTimer = 0;
     this.fliesN = 0;
     this.nearMisses = 0;
     this.slowMoTimer = 0;
@@ -332,22 +338,31 @@ export class Engine {
 
   /* ------------------------------------------------------------ */
 
-  private onPlayerEvent(e: "jump" | "dbl" | "land"): void {
+  private onPlayerEvent(e: "jump" | "dbl" | "land", info?: LandingInfo): void {
     const gy = this.groundY;
     const x = this.foxX;
     if (e === "jump") {
       this.audio.jump();
-      this.particles.dust(x - 10, gy, 4);
+      this.particles.dust(x - 10, gy, 5);
+      this.particles.sparks(x - 8, gy - 12, 3);
     } else if (e === "dbl") {
       this.audio.dbl();
-      this.particles.dust(x, gy - this.player.py, 5);
-      this.particles.sparks(x, gy - this.player.py - 20, 6);
-      this.particles.ring(x, gy - this.player.py - 4, 26);
+      this.particles.dust(x, gy - this.player.py, 6);
+      this.particles.sparks(x, gy - this.player.py - 16, 9);
+      this.particles.ring(x, gy - this.player.py - 4, 32);
     } else {
       this.audio.land();
-      this.particles.dust(x - 6, gy, 8, -this.speed * 0.12);
+      const isHeavy = info?.hardLanding || info?.fastFallLanding;
+      const count = isHeavy ? 14 : 8;
+      this.particles.dust(x - 6, gy, count, -this.speed * 0.14);
+      if (isHeavy) {
+        this.particles.dust(x + 8, gy, 6, this.speed * 0.06);
+        this.particles.ring(x, gy - 2, 28);
+        this.cameraBounceY = Math.min(12, (info?.impactVy || 600) * 0.012);
+      }
       if (!this.reduced && this.settings.screenShake) {
-        this.shake = Math.max(this.shake, this.animal.physics.landingShake * 1.5);
+        const shakeMult = isHeavy ? 2.2 : 1.5;
+        this.shake = Math.max(this.shake, this.animal.physics.landingShake * shakeMult);
       }
     }
   }
@@ -361,7 +376,10 @@ export class Engine {
   }
 
   private get foxX(): number {
-    return clamp(this.w * 0.22, 90, 320);
+    const speedRatio = clamp((this.speed - 340) / 480, 0, 1);
+    // Dynamically leads camera ahead: runner sits at 22% at low speed, easing back to 16.5% at top speed
+    const factor = lerp(0.22, 0.165, speedRatio);
+    return clamp(this.w * factor, 85, 300);
   }
 
   private get foxScale(): number {
@@ -451,6 +469,12 @@ export class Engine {
   private update(dt: number): void {
     if (this.state === "paused") return;
 
+    // Hit-stop frame freeze for maximum kinetic impact
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer -= dt;
+      return;
+    }
+
     const playing = this.state === "playing";
     const dying = this.state === "dying";
 
@@ -510,14 +534,26 @@ export class Engine {
       }
       this.audio.setSpeed(this.speed);
 
-      // Dynamic racing camera FOV zoom pull & vertical tracking
+      // Dynamic racing camera FOV zoom pull & banking tilt
+      const speedRatio = clamp((this.speed - 340) / 480, 0, 1);
       const targetZoom = this.settings.speedEffects && !this.reduced
-        ? 1 - Math.min(0.065, (this.speed - 340) / 7200)
+        ? 1 - speedRatio * 0.088
         : 1;
       this.cameraZoom += (targetZoom - this.cameraZoom) * dt * 3.5;
 
       const targetCamY = !this.reduced ? this.player.py * 0.12 : 0;
       this.cameraY += (targetCamY - this.cameraY) * dt * 7;
+      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 14);
+
+      let targetTilt = 0;
+      if (!this.reduced) {
+        if (this.player.sliding) {
+          targetTilt = -0.016;
+        } else if (!this.player.grounded) {
+          targetTilt = clamp(-this.player.vy * 0.00003, -0.024, 0.024);
+        }
+      }
+      this.cameraTilt += (targetTilt - this.cameraTilt) * Math.min(1, dt * 6.0);
 
       // High speed wind streaks
       if (this.speed > 520 && this.settings.speedEffects) {
@@ -663,8 +699,9 @@ export class Engine {
           ob.nearMissed = true;
           this.nearMisses++;
           this.audio.nearMiss();
-          this.particles.sparks(fx, hb[3], 9);
-          this.slowMoTimer = 0.12;
+          this.particles.sparks(fx, hb[3], 12);
+          this.hitStopTimer = 0.045; // 45ms impact freeze
+          this.slowMoTimer = 0.14;
           this.timeScale = 0.55;
           this.cb.onNearMiss?.(this.nearMisses);
           this.fliesN++;
@@ -706,9 +743,11 @@ export class Engine {
         const sx = this.bloom.x - this.scroll;
         const pcy = gy - this.player.py - 28;
         if (Math.hypot(fx - sx, pcy - this.bloom.y) < 42) {
-          this.player.ghostT = 4.2;
+          this.player.ghostT = 4.5;
           this.audio.bloom();
-          this.particles.spores(sx, this.bloom.y, 16, true);
+          this.particles.spores(sx, this.bloom.y, 20, true);
+          this.particles.ring(sx, this.bloom.y, 36);
+          this.hitStopTimer = 0.055; // 55ms sacred bloom impact freeze
           this.cb.onToast(++this.toastId, "Spirit Bloom", "You are untouchable");
           this.bloom = null;
         }
@@ -750,12 +789,13 @@ export class Engine {
         ? rand(-this.shake, this.shake)
         : 0;
 
-    // ---- dynamic camera transform (FOV zoom & vertical spring) ----
+    // ---- dynamic camera transform (FOV zoom, banking tilt & vertical spring) ----
     const cx = w * 0.5;
     const cy = h * 0.5;
     ctx.save();
-    ctx.translate(cx, cy + this.cameraY);
+    ctx.translate(cx, cy + this.cameraY + this.cameraBounceY);
     ctx.scale(this.cameraZoom, this.cameraZoom);
+    ctx.rotate(this.cameraTilt);
     ctx.translate(-cx, -cy);
 
     // ---- backdrop (unshaken) ----
@@ -830,20 +870,51 @@ export class Engine {
     }
   }
 
-  /** Subtle peripheral racing wind streaks when reaching high velocities */
+  /** Subtle peripheral racing wind streaks & corner tunnel vision when reaching high velocities */
   private renderSpeedEffects(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    const alpha = Math.min(0.24, (this.speed - 520) / 800);
+    const speedRatio = Math.min(1, (this.speed - 520) / 380);
+    const alpha = 0.06 + speedRatio * 0.22;
     ctx.save();
     ctx.strokeStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.3;
-    for (let i = 0; i < 7; i++) {
-      const sy = (this.time * 850 + i * 143) % (h * 0.85);
-      const len = 70 + (i * 41) % 110;
-      const sx = w - ((this.time * 2600 + i * 390) % (w * 0.75));
+    ctx.lineWidth = 1.4;
+
+    // Horizontal rushing air streams
+    for (let i = 0; i < 9; i++) {
+      const sy = (this.time * 880 + i * 137) % (h * 0.86);
+      const len = 80 + (i * 47) % 130 + speedRatio * 80;
+      const sx = w - ((this.time * 2800 + i * 370) % (w * 0.8));
       ctx.beginPath();
       ctx.moveTo(sx, sy);
       ctx.lineTo(sx - len, sy);
       ctx.stroke();
+    }
+
+    // Peripheral corner tunnel lines when breaking high speeds (>620 px/s)
+    if (this.speed > 620) {
+      const tunnelAlpha = Math.min(0.18, (this.speed - 620) / 600);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${tunnelAlpha.toFixed(3)})`;
+      ctx.lineWidth = 1.2;
+      const corners = [
+        [0, 0],
+        [w, 0],
+        [0, h * 0.78],
+        [w, h * 0.78],
+      ];
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      for (const [corX, corY] of corners) {
+        for (let j = 0; j < 3; j++) {
+          const t = (this.time * 4 + j * 0.33) % 1;
+          const px = lerp(corX, cx, t);
+          const py = lerp(corY, cy, t);
+          const pEnd = lerp(corX, cx, Math.min(1, t + 0.18));
+          const pEndY = lerp(corY, cy, Math.min(1, t + 0.18));
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(pEnd, pEndY);
+          ctx.stroke();
+        }
+      }
     }
     ctx.restore();
   }
