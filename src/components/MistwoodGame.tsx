@@ -139,6 +139,14 @@ export default function MistwoodGame() {
     });
   }, []);
 
+  const handleResetSettings = useCallback(() => {
+    setSettings(DEFAULT_SETTINGS);
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    } catch {}
+    engineRef.current?.applySettings(DEFAULT_SETTINGS);
+  }, []);
+
   // Engine Lifecycle
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -462,7 +470,9 @@ export default function MistwoodGame() {
           muted={muted}
           onUpdateSettings={handleUpdateSettings}
           onToggleMute={toggleMute}
+          onResetDefaults={handleResetSettings}
           onClose={() => setShowSettings(false)}
+          onHover={playHover}
           onClickSound={playClick}
         />
       )}
