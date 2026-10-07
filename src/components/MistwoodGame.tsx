@@ -366,7 +366,7 @@ export default function MistwoodGame() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#05070b]">
       {/* Canvas Game Layer */}
-      <canvas ref={canvasRef} className="absolute inset-0" />
+      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
 
       {/* Cinematic Vignette Overlay for Menus */}
       {(state === "menu" || state === "over" || state === "paused") && (

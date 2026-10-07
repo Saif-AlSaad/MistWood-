@@ -232,6 +232,11 @@ export class Engine {
     this.activePointers.clear();
     this.slideHeld = false;
     this.slideImpulseT = 0;
+    this.cameraZoom = 1;
+    this.cameraY = 0;
+    this.cameraBounceY = 0;
+    this.cameraTilt = 0;
+    this.shake = 0;
     this.audio.ensure();
     this.audio.resume();
     this.setState("menu");
@@ -262,12 +267,12 @@ export class Engine {
 
   private resize = (): void => {
     this.dpr = clamp(window.devicePixelRatio || 1, 1, 2);
-    this.w = window.innerWidth;
-    this.h = window.innerHeight;
+    this.w = window.innerWidth || document.documentElement.clientWidth || 1280;
+    this.h = window.innerHeight || document.documentElement.clientHeight || 720;
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
-    this.canvas.style.width = `${this.w}px`;
-    this.canvas.style.height = `${this.h}px`;
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
     this.world.onResize(this.w, this.h);
   };
 
@@ -432,11 +437,12 @@ export class Engine {
       if (isHeavy) {
         this.particles.dust(x + 8, gy, 6, this.speed * 0.06);
         this.particles.ring(x, gy - 2, 28);
-        this.cameraBounceY = Math.min(12, (info?.impactVy || 600) * 0.012);
+        if (!this.reduced) {
+          this.cameraBounceY = Math.min(3.0, (info?.impactVy || 600) * 0.0035);
+        }
       }
-      if (!this.reduced && this.settings.screenShake) {
-        const shakeMult = isHeavy ? 2.2 : 1.5;
-        this.shake = Math.max(this.shake, this.animal.physics.landingShake * shakeMult);
+      if (!this.reduced && this.settings.screenShake && isHeavy) {
+        this.shake = Math.min(4.0, this.animal.physics.landingShake * 0.6);
       }
     }
   }
@@ -611,23 +617,21 @@ export class Engine {
       // Dynamic racing camera FOV zoom pull & banking tilt
       const speedRatio = clamp((this.speed - 340) / 480, 0, 1);
       const targetZoom = this.settings.speedEffects && !this.reduced
-        ? 1 - speedRatio * 0.088
+        ? 1 - speedRatio * 0.055
         : 1;
-      this.cameraZoom += (targetZoom - this.cameraZoom) * dt * 3.5;
+      this.cameraZoom += (targetZoom - this.cameraZoom) * dt * 2.8;
 
-      const targetCamY = !this.reduced ? this.player.py * 0.12 : 0;
-      this.cameraY += (targetCamY - this.cameraY) * dt * 7;
-      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 14);
+      // Stable grounded camera: ground stays anchored, gently lead high leaps above 100px
+      const highJumpExcess = Math.max(0, this.player.py - 100);
+      const targetCamY = !this.reduced ? highJumpExcess * 0.05 : 0;
+      this.cameraY += (targetCamY - this.cameraY) * dt * 4.5;
+      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 12);
 
       let targetTilt = 0;
-      if (!this.reduced) {
-        if (this.player.sliding) {
-          targetTilt = -0.016;
-        } else if (!this.player.grounded) {
-          targetTilt = clamp(-this.player.vy * 0.00003, -0.024, 0.024);
-        }
+      if (!this.reduced && this.player.sliding) {
+        targetTilt = -0.005;
       }
-      this.cameraTilt += (targetTilt - this.cameraTilt) * Math.min(1, dt * 6.0);
+      this.cameraTilt += (targetTilt - this.cameraTilt) * Math.min(1, dt * 4.0);
 
       // High speed wind streaks
       if (this.speed > 520 && this.settings.speedEffects) {
@@ -721,6 +725,11 @@ export class Engine {
         this.leafTimer = rand(1.4, 4.2);
         this.particles.leaf(this.scroll % 200 + this.w + 30, rand(50, this.h * 0.4));
       }
+    } else {
+      this.cameraZoom += (1 - this.cameraZoom) * Math.min(1, dt * 6.0);
+      this.cameraY += (0 - this.cameraY) * Math.min(1, dt * 8.0);
+      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 14.0);
+      this.cameraTilt += (0 - this.cameraTilt) * Math.min(1, dt * 8.0);
     }
 
     this.particles.update(dt, -40);
@@ -858,6 +867,7 @@ export class Engine {
     const { w, h } = this;
     if (!w || !h) return;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
 
     const gy = this.groundY;
     const pal = this.world.pal;
@@ -871,8 +881,9 @@ export class Engine {
         : 0;
 
     // ---- dynamic camera transform (FOV zoom, banking tilt & vertical spring) ----
+    // Anchor camera zoom & tilt pivot directly on ground level (gy) so zoom never displaces the ground horizon!
     const cx = w * 0.5;
-    const cy = h * 0.5;
+    const cy = gy;
     ctx.save();
     ctx.translate(cx, cy + this.cameraY + this.cameraBounceY);
     ctx.scale(this.cameraZoom, this.cameraZoom);
@@ -895,7 +906,7 @@ export class Engine {
 
     for (const ob of this.obstacles) {
       const sx = ob.x - this.scroll;
-      if (sx < -140 || sx > w + 140) continue;
+      if (sx < -260 || sx > w + 260) continue;
       ctx.save();
       ctx.translate(sx, 0);
       const obS = { ...ob, x: 0 };
@@ -905,14 +916,14 @@ export class Engine {
 
     if (this.bloom) {
       const sx = this.bloom.x - this.scroll;
-      if (sx > -80 && sx < w + 80) {
+      if (sx > -160 && sx < w + 160) {
         this.world.renderBloom(ctx, { x: sx, y: this.bloom.y, phase: this.bloom.phase }, this.time, gy);
       }
     }
 
     for (const f of this.flies) {
       const sx = f.x - this.scroll;
-      if (sx < -40 || sx > w + 40) continue;
+      if (sx < -120 || sx > w + 120) continue;
       this.world.renderFly(ctx, { ...f, x: sx } as Fly, this.time, gy);
       // keep world-space hover sync
       f.y = f.baseY + Math.sin(this.time * 2.1 + f.phase) * 9;

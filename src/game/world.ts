@@ -876,16 +876,22 @@ export class WorldRenderer {
   /* ---------------- render passes ---------------- */
 
   renderSky(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    const g = ctx.createLinearGradient(0, 0, 0, h);
+    const overscan = Math.max(w * 0.5, 600);
+    const g = ctx.createLinearGradient(0, -overscan, 0, h + overscan);
     g.addColorStop(0, rgb(this.pal.skyTop));
     g.addColorStop(1, rgb(this.pal.skyLow));
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(-overscan, -overscan, w + overscan * 2, h + overscan * 2);
   }
 
   /** photoreal backdrop with mood grading, celestial glow, stars & moon */
   renderFar(ctx: CanvasRenderingContext2D, w: number, h: number, time: number): void {
     const p = this.pal;
+    const overscan = Math.max(w * 0.5, 600);
+    const x0 = -overscan;
+    const totalW = w + overscan * 2;
+    const totalH = h + overscan * 2;
+
     // weight of the dusk image — cyclical triangle peaking at phase 3
     const phase = this.bucket / 8;
     const d = Math.abs(phase - 3);
@@ -903,10 +909,10 @@ export class WorldRenderer {
 
     // mood wash + night dim
     ctx.fillStyle = rgb(p.fog, 0.07);
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(x0, -overscan, totalW, totalH);
     if (p.night > 0.01) {
       ctx.fillStyle = `rgba(3,5,16,${(p.night * 0.36).toFixed(3)})`;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(x0, -overscan, totalW, totalH);
     }
 
     const ax = p.sunX * w;
@@ -1050,11 +1056,12 @@ export class WorldRenderer {
     ctx: CanvasRenderingContext2D, img: HTMLCanvasElement,
     w: number, h: number, dx: number, alpha: number,
   ): void {
-    const s = Math.max(w / img.width, h / img.height) * 1.07;
+    const overscan = Math.max(w * 0.5, 600);
+    const s = Math.max((w + overscan * 2) / img.width, (h + overscan * 2) / img.height) * 1.08;
     const dw = img.width * s;
     const dh = img.height * s;
     ctx.globalAlpha = alpha;
-    ctx.drawImage(img, (w - dw) / 2 + dx, h - dh, dw, dh);
+    ctx.drawImage(img, (w - dw) / 2 + dx, (h - dh) / 2, dw, dh);
     ctx.globalAlpha = 1;
   }
 
@@ -1067,13 +1074,16 @@ export class WorldRenderer {
     scroll: number,
     time = 0,
   ): void {
+    const overscan = Math.max(w * 0.5, 600);
+
     // 1. Extreme background mountain ridge (0.025x parallax, deep atmospheric haze)
     const sM = (h * 0.3) / 280;
     const wM = 2048 * sM;
     const yM = gy + 32 - h * 0.3;
     let offM = -((scroll * 0.025) % wM);
+    while (offM > -overscan) offM -= wM;
     ctx.globalAlpha = 0.52;
-    for (; offM < w; offM += wM) ctx.drawImage(this.mountainTint, offM, yM, wM, h * 0.3);
+    for (; offM < w + overscan; offM += wM) ctx.drawImage(this.mountainTint, offM, yM, wM, h * 0.3);
     ctx.globalAlpha = 1;
 
     // 2. Far forest treeline (0.06x parallax, out-of-focus DoF blur)
@@ -1081,8 +1091,9 @@ export class WorldRenderer {
     const wF = 2048 * sF;
     const yF = gy + 26 - h * 0.32;
     let off = -((scroll * 0.06) % wF);
+    while (off > -overscan) off -= wF;
     ctx.globalAlpha = 0.78;
-    for (; off < w; off += wF) ctx.drawImage(this.farTint, off, yF, wF, h * 0.32);
+    for (; off < w + overscan; off += wF) ctx.drawImage(this.farTint, off, yF, wF, h * 0.32);
     ctx.globalAlpha = 1;
 
     // 3. Volumetric undulating ground mist ribbons between far and near treeline
@@ -1092,9 +1103,10 @@ export class WorldRenderer {
     const sN = (h * 0.38) / 400;
     const wN = 2048 * sN;
     const yN = gy + 18 - h * 0.38;
-    off = -((scroll * 0.13) % wN);
+    let offN = -((scroll * 0.13) % wN);
+    while (offN > -overscan) offN -= wN;
     ctx.globalAlpha = 0.95;
-    for (; off < w; off += wN) ctx.drawImage(this.nearTint, off, yN, wN, h * 0.38);
+    for (; offN < w + overscan; offN += wN) ctx.drawImage(this.nearTint, offN, yN, wN, h * 0.38);
     ctx.globalAlpha = 1;
   }
 
@@ -1108,6 +1120,9 @@ export class WorldRenderer {
   ): void {
     const p = this.pal;
     const mistColor = p.fog;
+    const overscan = Math.max(w * 0.5, 600);
+    const x0 = -overscan;
+    const totalW = w + overscan * 2;
 
     // Deep broad horizon mist band
     const fg = ctx.createLinearGradient(0, gy - 110, 0, gy + 35);
@@ -1116,15 +1131,15 @@ export class WorldRenderer {
     fg.addColorStop(0.7, rgb(mistColor, 0.32));
     fg.addColorStop(1, rgb(mistColor, 0));
     ctx.fillStyle = fg;
-    ctx.fillRect(0, gy - 110, w, 145);
+    ctx.fillRect(x0, gy - 110, totalW, 145);
 
     // Rolling undulating mist ribbon with organic sine ripples
     ctx.save();
     ctx.fillStyle = rgb(mistColor, 0.24 + (1 - p.night) * 0.08);
     ctx.beginPath();
-    ctx.moveTo(0, gy + 20);
+    ctx.moveTo(x0, gy + 30);
     const step = 28;
-    for (let x = 0; x <= w + step; x += step) {
+    for (let x = x0; x <= w + overscan + step; x += step) {
       const u = x * 0.0045 + scroll * 0.001;
       const my =
         gy - 55 +
@@ -1133,8 +1148,8 @@ export class WorldRenderer {
         Math.sin(u * 13 + time * 0.9) * 4;
       ctx.lineTo(x, my);
     }
-    ctx.lineTo(w + step, gy + 30);
-    ctx.lineTo(0, gy + 30);
+    ctx.lineTo(w + overscan + step, gy + 30);
+    ctx.lineTo(x0, gy + 30);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -1145,9 +1160,11 @@ export class WorldRenderer {
     const sT = (h * 1.06) / 900;
     const wT = 3072 * sT;
     const y = h + 50 - h * 1.06;
-    const off = -((scroll * 0.34) % wT);
+    const overscan = Math.max(w * 0.5, 600);
+    let off = -((scroll * 0.34) % wT);
+    while (off > -overscan) off -= wT;
     ctx.globalAlpha = 0.92;
-    for (let o = off; o < w; o += wT) ctx.drawImage(this.trunkTint, o, y, wT, h * 1.06);
+    for (let o = off; o < w + overscan; o += wT) ctx.drawImage(this.trunkTint, o, y, wT, h * 1.06);
     ctx.globalAlpha = 1;
   }
 
@@ -1247,16 +1264,19 @@ export class WorldRenderer {
     time = 0,
   ): void {
     const p = this.pal;
-    const depth = h - gy;
+    const overscan = Math.max(w * 0.5, 600);
+    const x0 = -overscan;
+    const totalW = w + overscan * 2;
+    const bottomY = h + overscan + 400;
 
     // 1. Stratified organic earth gradient: top loam -> deep subsoil -> bedrock
-    const soilGrad = ctx.createLinearGradient(0, gy, 0, h);
+    const soilGrad = ctx.createLinearGradient(0, gy, 0, bottomY);
     soilGrad.addColorStop(0, rgb(p.ground));
     soilGrad.addColorStop(0.18, rgb(mix(p.ground, [24, 18, 14], 0.45)));
     soilGrad.addColorStop(0.65, rgb(mix(p.ground, [8, 10, 14], 0.75)));
     soilGrad.addColorStop(1, rgb([4, 6, 10]));
     ctx.fillStyle = soilGrad;
-    ctx.fillRect(0, gy, w, depth);
+    ctx.fillRect(x0, gy, totalW, bottomY - gy);
 
     // 2. Reflective glassy water puddle patches along the forest trail
     this.renderPuddles(ctx, w, gy, scroll, time);
@@ -1268,22 +1288,22 @@ export class WorldRenderer {
     sheen.addColorStop(0.35, rgb(p.rim, 0.09));
     sheen.addColorStop(1, rgb(p.rim, 0));
     ctx.fillStyle = sheen;
-    ctx.fillRect(0, gy - 1, w, 33);
+    ctx.fillRect(x0, gy - 1, totalW, 33);
 
     // Celestial directional rim light highlight directly beneath sun/moon
-    const celRim = ctx.createRadialGradient(sunXpx, gy, 2, sunXpx, gy, w * 0.45);
+    const celRim = ctx.createRadialGradient(sunXpx, gy, 2, sunXpx, gy, w * 0.55);
     celRim.addColorStop(0, rgb(p.rim, 0.35));
     celRim.addColorStop(0.5, rgb(p.rim, 0.1));
     celRim.addColorStop(1, rgb(p.rim, 0));
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.fillStyle = celRim;
-    ctx.fillRect(0, gy - 1, w, 24);
+    ctx.fillRect(x0, gy - 1, totalW, 24);
     ctx.restore();
 
-    // Sharp top turf contact line
-    ctx.fillStyle = rgb(p.rim, 0.42);
-    ctx.fillRect(0, gy - 0.5, w, 1.2);
+    // Sharp top turf contact line (rock solid, continuous across entire viewport)
+    ctx.fillStyle = rgb(p.rim, 0.45);
+    ctx.fillRect(x0, gy - 0.5, totalW, 1.4);
   }
 
   /** Glassy water puddles reflecting the sky and silhouetted forest canopy */
@@ -1296,8 +1316,9 @@ export class WorldRenderer {
   ): void {
     const p = this.pal;
     const puddleStep = 580;
-    const p0 = Math.floor(scroll / puddleStep) - 1;
-    const pn = Math.ceil(w / puddleStep) + 2;
+    const overscan = Math.max(w * 0.5, 600);
+    const p0 = Math.floor((scroll - overscan) / puddleStep) - 1;
+    const pn = Math.ceil((w + overscan * 2) / puddleStep) + 3;
 
     for (let k = 0; k < pn; k++) {
       const idx = p0 + k;
@@ -1309,7 +1330,7 @@ export class WorldRenderer {
       const ph = 5.5 + hash(idx, 904) * 4.5;
       const py = gy + 1.2 + hash(idx, 905) * 3;
 
-      if (px + pw < -50 || px - pw > w + 50) continue;
+      if (px + pw < -overscan || px - pw > w + overscan) continue;
 
       // Dark wet mud depression basin
       ctx.fillStyle = "rgba(4, 5, 8, 0.65)";
@@ -1371,9 +1392,10 @@ export class WorldRenderer {
     // dense fine grass — one batched path
     ctx.fillStyle = rgb(blade);
     ctx.beginPath();
+    const overscan = Math.max(w * 0.5, 600);
     const step = 13;
-    const i0 = Math.floor(scroll / step) - 1;
-    const n = Math.ceil(w / step) + 3;
+    const i0 = Math.floor((scroll - overscan) / step) - 1;
+    const n = Math.ceil((w + overscan * 2) / step) + 3;
     for (let k = 0; k < n; k++) {
       const i = i0 + k;
       const sx = i * step - scroll + hash(i, 91) * 8;
@@ -1419,8 +1441,8 @@ export class WorldRenderer {
     ctx.fillStyle = rgb(tuft);
     ctx.beginPath();
     const tStep = 97;
-    const t0 = Math.floor(scroll / tStep) - 1;
-    const tn = Math.ceil(w / tStep) + 3;
+    const t0 = Math.floor((scroll - overscan) / tStep) - 1;
+    const tn = Math.ceil((w + overscan * 2) / tStep) + 3;
     for (let k = 0; k < tn; k++) {
       const i = t0 + k;
       if (hash(i, 94) < 0.3) continue;
@@ -1503,8 +1525,8 @@ export class WorldRenderer {
 
     // stones + glowing mushrooms
     const sStep = 173;
-    const s0 = Math.floor(scroll / sStep) - 1;
-    const sn = Math.ceil(w / sStep) + 3;
+    const s0 = Math.floor((scroll - overscan) / sStep) - 1;
+    const sn = Math.ceil((w + overscan * 2) / sStep) + 3;
     for (let k = 0; k < sn; k++) {
       const i = s0 + k;
       const sx = i * sStep - scroll + hash(i, 98) * 90;
@@ -2063,10 +2085,11 @@ export class WorldRenderer {
   renderForeground(ctx: CanvasRenderingContext2D, w: number, h: number, scroll: number): void {
     const spacing = 1150;
     const sc = scroll * 1.5;
-    const i0 = Math.floor(sc / spacing);
-    for (let i = i0 - 1; i * spacing < sc + w + 700; i++) {
+    const overscan = Math.max(w * 0.5, 600);
+    const i0 = Math.floor((sc - overscan) / spacing);
+    for (let i = i0 - 1; i * spacing < sc + w + overscan + 700; i++) {
       const px = i * spacing - sc + hash(i, 131) * 420;
-      if (px < -620 || px > w + 320) continue;
+      if (px < -620 - overscan || px > w + overscan + 320) continue;
       const v = hash(i, 132);
       const spr = this.fgSprites[(v * 3) | 0];
       const s = (0.9 + hash(i, 133) * 1.15) * (h / 760);
