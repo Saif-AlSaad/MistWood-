@@ -8,6 +8,7 @@ import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, O
 import { DEFAULT_SETTINGS, FOX_PELTS, clamp, lerp, rand, speedToKmh } from "./types";
 import type { AnimalDefinition } from "./animals";
 import { ANIMALS, mapLegacyPeltId } from "./animals";
+import { haptics, setHapticsEnabled } from "../utils/haptics";
 
 interface EngineCallbacks {
   onState: (s: GameState) => void;
@@ -120,6 +121,7 @@ export class Engine {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     document.removeEventListener("visibilitychange", this.onVis);
+    window.removeEventListener("pagehide", this.onPageHide);
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
@@ -136,6 +138,7 @@ export class Engine {
     this.audio.setMasterVolume(s.masterVolume);
     this.audio.setSfxVolume(s.sfxVolume);
     this.audio.setMusicVolume(s.musicVolume);
+    setHapticsEnabled(s.haptics ?? true);
   }
 
   /* ------------------------------------------------------------ */
@@ -160,6 +163,7 @@ export class Engine {
 
   start(): void {
     this.audio.ensure();
+    this.audio.resume();
     this.player.reset();
     this.particles.clear();
     this.obstacles = [];
@@ -211,6 +215,7 @@ export class Engine {
     this.slideImpulseT = 0.55;
     if (!this.player.grounded) this.player.fastFall = true;
     this.player.slideImpulse();
+    haptics.slide();
   }
 
   slideEnd(): void {
@@ -227,15 +232,19 @@ export class Engine {
     this.activePointers.clear();
     this.slideHeld = false;
     this.slideImpulseT = 0;
+    this.audio.ensure();
+    this.audio.resume();
     this.setState("menu");
   }
 
   togglePause(): void {
     if (this.state === "playing") {
       this.setState("paused");
+      this.audio.suspend();
     } else if (this.state === "paused") {
       this.setState("playing");
       this.audio.ensure();
+      this.audio.resume();
       this.audio.ui();
     }
   }
@@ -263,7 +272,15 @@ export class Engine {
   };
 
   private onVis = (): void => {
-    if (document.hidden && this.state === "playing") this.setState("paused");
+    if (document.hidden) {
+      if (this.state === "playing") this.setState("paused");
+      this.audio.suspend();
+    }
+  };
+
+  private onPageHide = (): void => {
+    if (this.state === "playing") this.setState("paused");
+    this.audio.suspend();
   };
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -382,6 +399,7 @@ export class Engine {
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     document.addEventListener("visibilitychange", this.onVis);
+    window.addEventListener("pagehide", this.onPageHide);
     this.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.canvas.addEventListener("pointermove", this.onPointerMove);
     this.canvas.addEventListener("pointerup", this.onPointerUp);
@@ -396,16 +414,19 @@ export class Engine {
     const x = this.foxX;
     if (e === "jump") {
       this.audio.jump();
+      haptics.jump();
       this.particles.dust(x - 10, gy, 5);
       this.particles.sparks(x - 8, gy - 12, 3);
     } else if (e === "dbl") {
       this.audio.dbl();
+      haptics.doubleJump();
       this.particles.dust(x, gy - this.player.py, 6);
       this.particles.sparks(x, gy - this.player.py - 16, 9);
       this.particles.ring(x, gy - this.player.py - 4, 32);
     } else {
       this.audio.land();
       const isHeavy = info?.hardLanding || info?.fastFallLanding;
+      haptics.land(isHeavy);
       const count = isHeavy ? 14 : 8;
       this.particles.dust(x - 6, gy, count, -this.speed * 0.14);
       if (isHeavy) {
@@ -755,6 +776,7 @@ export class Engine {
           ob.nearMissed = true;
           this.nearMisses++;
           this.audio.nearMiss();
+          haptics.nearMiss();
           this.particles.sparks(fx, hb[3], 12);
           this.hitStopTimer = 0.045; // 45ms impact freeze
           this.slowMoTimer = 0.14;
@@ -787,6 +809,7 @@ export class Engine {
         this.flies.splice(i, 1);
         this.fliesN++;
         this.audio.collect();
+        haptics.collect();
         this.particles.sparks(sx, fy, 7);
       }
     }
@@ -801,6 +824,7 @@ export class Engine {
         if (Math.hypot(fx - sx, pcy - this.bloom.y) < 42) {
           this.player.ghostT = 4.5;
           this.audio.bloom();
+          haptics.bloom();
           this.particles.spores(sx, this.bloom.y, 20, true);
           this.particles.ring(sx, this.bloom.y, 36);
           this.hitStopTimer = 0.055; // 55ms sacred bloom impact freeze
@@ -818,6 +842,7 @@ export class Engine {
     this.timeScale = 0.3;
     this.deadReal = 0;
     this.audio.death();
+    haptics.death();
     const gy = this.groundY;
     this.particles.spores(this.foxX, gy - this.player.py - 26, 22, true);
     this.particles.dust(this.foxX, gy, 10);

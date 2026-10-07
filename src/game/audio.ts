@@ -50,6 +50,18 @@ export class AudioEngine {
     this.startWind();
   }
 
+  suspend(): void {
+    if (this.ctx && this.ctx.state === "running") {
+      void this.ctx.suspend();
+    }
+  }
+
+  resume(): void {
+    if (this.ctx && this.ctx.state === "suspended") {
+      void this.ctx.resume();
+    }
+  }
+
   setMuted(m: boolean): void {
     this.muted = m;
     if (this.ctx && this.master) {

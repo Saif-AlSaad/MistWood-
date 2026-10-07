@@ -229,12 +229,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
+            {/* Haptic Vibration */}
+            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div>
+                <div className="text-xs font-medium text-white">Touch Haptics (Vibration)</div>
+                <div className="text-[10px] text-white/40">Tactile rumble feedback for jumps, slides, and near misses</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onUpdateSettings({ haptics: settings.haptics === false ? true : false })}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                  settings.haptics !== false ? "bg-amber-400" : "bg-white/15"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-stone-900 transition-transform ${
+                    settings.haptics !== false ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Controls Reference */}
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3.5">
               <span className="text-[10px] font-semibold text-white/45 uppercase tracking-wider">
                 Controls Reference
               </span>
               <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-white/70">
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">TOUCH</span>
+                  <span>Right (Jump) · Left (Slide)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">SWIPE</span>
+                  <span>Swipe Down (Slide)</span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">SPACE / W</span>
                   <span>Jump / Leap</span>

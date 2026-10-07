@@ -20,6 +20,7 @@ import { Garage } from "./ui/Garage";
 import { SettingsModal } from "./ui/SettingsModal";
 import { ToastNotification } from "./ui/ToastNotification";
 import { OrientationPrompt } from "./ui/OrientationPrompt";
+import { haptics } from "../utils/haptics";
 
 export default function MistwoodGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -116,6 +117,7 @@ export default function MistwoodGame() {
   }, []);
 
   const playClick = useCallback(() => {
+    haptics.ui();
     engineRef.current?.getAudio().uiClick();
   }, []);
 
@@ -214,6 +216,39 @@ export default function MistwoodGame() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [state, showGarage, showSettings]);
+
+  // Android Back Button / Navigation Gesture Interception
+  useEffect(() => {
+    try {
+      window.history.pushState({ mistwood: true }, "");
+    } catch {}
+
+    const onPop = () => {
+      try {
+        window.history.pushState({ mistwood: true }, "");
+      } catch {}
+
+      if (showGarage) {
+        setShowGarage(false);
+        return;
+      }
+      if (showSettings) {
+        setShowSettings(false);
+        return;
+      }
+      if (state === "playing") {
+        engineRef.current?.togglePause();
+        return;
+      }
+      if (state === "paused" || state === "over") {
+        engineRef.current?.toMenu();
+        return;
+      }
+    };
+
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [showGarage, showSettings, state]);
 
   // Game Control Callbacks
   const start = useCallback(() => {

@@ -139,6 +139,7 @@ export interface GameSettings {
   reducedMotion: boolean;
   particleIntensity: "high" | "low";
   speedEffects: boolean;
+  haptics?: boolean;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -149,6 +150,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   reducedMotion: false,
   particleIntensity: "high",
   speedEffects: true,
+  haptics: true,
 };
 
 export const SETTINGS_STORAGE_KEY = "mistwood_settings";
