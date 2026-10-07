@@ -21,6 +21,7 @@ import { SettingsModal } from "./ui/SettingsModal";
 import { ToastNotification } from "./ui/ToastNotification";
 import { OrientationPrompt } from "./ui/OrientationPrompt";
 import { haptics } from "../utils/haptics";
+import { initNativeAndroid, registerNativeBackButton } from "../utils/native";
 
 export default function MistwoodGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -107,6 +108,11 @@ export default function MistwoodGame() {
       window.removeEventListener("resize", checkOrientation);
       window.removeEventListener("orientationchange", checkOrientation);
     };
+  }, []);
+
+  // Initialize Native Android Immersive Mode on Mount
+  useEffect(() => {
+    initNativeAndroid();
   }, []);
 
   const activeAnimal = ANIMALS[activeAnimalId] || ANIMALS.fox;
@@ -217,7 +223,27 @@ export default function MistwoodGame() {
     return () => window.removeEventListener("keydown", onKey);
   }, [state, showGarage, showSettings]);
 
-  // Android Back Button / Navigation Gesture Interception
+  // Android Back Button & Navigation Gesture Action Hierarchy
+  const handleBackAction = useCallback(() => {
+    if (showGarage) {
+      setShowGarage(false);
+      return;
+    }
+    if (showSettings) {
+      setShowSettings(false);
+      return;
+    }
+    if (state === "playing") {
+      engineRef.current?.togglePause();
+      return;
+    }
+    if (state === "paused" || state === "over") {
+      engineRef.current?.toMenu();
+      return;
+    }
+  }, [showGarage, showSettings, state]);
+
+  // Hook Web popstate navigation
   useEffect(() => {
     try {
       window.history.pushState({ mistwood: true }, "");
@@ -227,28 +253,17 @@ export default function MistwoodGame() {
       try {
         window.history.pushState({ mistwood: true }, "");
       } catch {}
-
-      if (showGarage) {
-        setShowGarage(false);
-        return;
-      }
-      if (showSettings) {
-        setShowSettings(false);
-        return;
-      }
-      if (state === "playing") {
-        engineRef.current?.togglePause();
-        return;
-      }
-      if (state === "paused" || state === "over") {
-        engineRef.current?.toMenu();
-        return;
-      }
+      handleBackAction();
     };
 
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [showGarage, showSettings, state]);
+  }, [handleBackAction]);
+
+  // Hook Native Android Hardware Back Button (Capacitor)
+  useEffect(() => {
+    return registerNativeBackButton(handleBackAction);
+  }, [handleBackAction]);
 
   // Game Control Callbacks
   const start = useCallback(() => {
