@@ -54,7 +54,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   return (
     <>
       {/* ================= TOP-LEFT: Distance & Records ================= */}
-      <div className="pointer-events-none absolute left-4 top-4 z-40 flex flex-col gap-1.5 md:left-6 md:top-6 select-none">
+      <div
+        className="pointer-events-none absolute left-4 top-4 z-40 flex flex-col gap-1.5 md:left-6 md:top-6 select-none"
+        style={{
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingTop: "env(safe-area-inset-top, 0px)",
+        }}
+      >
         <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/45 px-4 py-2 text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-md">
           <div className="flex items-baseline gap-1">
             <span className="font-display text-2xl font-bold tracking-tight text-white md:text-3xl tabular-nums">
@@ -91,7 +97,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       </div>
 
       {/* ================= TOP-CENTER: Biome Journey & Active Buffs ================= */}
-      <div className="pointer-events-none absolute left-1/2 top-4 z-40 flex -translate-x-1/2 flex-col items-center gap-2 md:top-6 select-none">
+      <div
+        className="pointer-events-none absolute left-1/2 top-4 z-40 flex -translate-x-1/2 flex-col items-center gap-2 md:top-6 select-none"
+        style={{
+          paddingTop: "env(safe-area-inset-top, 0px)",
+        }}
+      >
         {/* Biome progress meter */}
         <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 backdrop-blur-md shadow-md">
           <Compass className="h-3.5 w-3.5 text-amber-200/80 shrink-0" />
@@ -129,7 +140,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       </div>
 
       {/* ================= TOP-RIGHT: Currency & Actions ================= */}
-      <div className="absolute right-4 top-4 z-40 flex items-center gap-2 md:right-6 md:top-6 select-none">
+      <div
+        className="absolute right-4 top-4 z-40 flex items-center gap-2 md:right-6 md:top-6 select-none"
+        style={{
+          paddingRight: "env(safe-area-inset-right, 0px)",
+          paddingTop: "env(safe-area-inset-top, 0px)",
+        }}
+      >
         {/* Fireflies currency */}
         <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-black/45 px-3.5 py-2 text-amber-300 backdrop-blur-md shadow-md">
           <Sparkles className="h-4 w-4 fill-amber-300/30" />
@@ -173,12 +190,30 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       </div>
 
       {/* ================= BOTTOM-LEFT: Racing Speedometer ================= */}
-      <div className="absolute bottom-5 left-4 z-40 md:bottom-6 md:left-6">
+      <div
+        className={`absolute z-40 transition-all duration-300 ${
+          isTouch
+            ? "bottom-26 left-4 sm:bottom-28 sm:left-6"
+            : "bottom-5 left-4 md:bottom-6 md:left-6"
+        }`}
+        style={{
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+        }}
+      >
         <Speedometer speedKmh={speedKmh} maxSpeedKmh={maxSpeedKmh} />
       </div>
 
       {/* ================= BOTTOM-RIGHT: Ability Indicator ================= */}
-      <div className="pointer-events-none absolute bottom-5 right-4 z-40 md:bottom-6 md:right-6 select-none">
+      <div
+        className={`pointer-events-none absolute z-40 select-none transition-all duration-300 ${
+          isTouch
+            ? "bottom-26 right-4 sm:bottom-28 sm:right-6"
+            : "bottom-5 right-4 md:bottom-6 md:right-6"
+        }`}
+        style={{
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
         <div
           className={`flex items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 backdrop-blur-md transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.5)] ${
             ghostT > 0
@@ -204,23 +239,48 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* ================= ON-SCREEN MOBILE TOUCH CONTROLS ================= */}
       {isTouch && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-40 flex items-center justify-between px-6 md:hidden select-none">
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex items-end justify-between px-4 sm:bottom-6 sm:px-6 select-none"
+          style={{
+            paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+          }}
+        >
           {/* Slide / Duck Button (Left thumb) */}
           <button
             type="button"
             aria-label="Slide"
             onTouchStart={(e) => {
               e.preventDefault();
+              try {
+                navigator.vibrate?.(12);
+              } catch {}
               onSlideStart();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               onSlideEnd();
             }}
-            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-white/20 bg-black/55 text-amber-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg transition-transform active:scale-90 active:bg-amber-500/25"
+            onPointerDown={(e) => {
+              if (e.pointerType !== "mouse") {
+                e.preventDefault();
+                try {
+                  navigator.vibrate?.(12);
+                } catch {}
+                onSlideStart();
+              }
+            }}
+            onPointerUp={(e) => {
+              if (e.pointerType !== "mouse") {
+                e.preventDefault();
+                onSlideEnd();
+              }
+            }}
+            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-white/20 bg-black/60 text-amber-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-transform active:scale-90 active:bg-amber-500/25 active:border-amber-300/50 touch-none select-none cursor-pointer"
           >
-            <ArrowBigDown className="h-8 w-8" />
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-white/80">
+            <ArrowBigDown className="h-8 w-8 text-amber-200" />
+            <span className="text-[10px] font-bold tracking-widest uppercase text-white/90">
               SLIDE
             </span>
           </button>
@@ -231,16 +291,34 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             aria-label="Jump"
             onTouchStart={(e) => {
               e.preventDefault();
+              try {
+                navigator.vibrate?.(10);
+              } catch {}
               onJumpStart();
             }}
             onTouchEnd={(e) => {
               e.preventDefault();
               onJumpEnd();
             }}
-            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-amber-300/40 bg-amber-400/20 text-amber-100 shadow-[0_8px_32px_rgba(251,191,36,0.35)] backdrop-blur-lg transition-transform active:scale-90 active:bg-amber-300/35"
+            onPointerDown={(e) => {
+              if (e.pointerType !== "mouse") {
+                e.preventDefault();
+                try {
+                  navigator.vibrate?.(10);
+                } catch {}
+                onJumpStart();
+              }
+            }}
+            onPointerUp={(e) => {
+              if (e.pointerType !== "mouse") {
+                e.preventDefault();
+                onJumpEnd();
+              }
+            }}
+            className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-amber-300/40 bg-amber-400/20 text-amber-100 shadow-[0_8px_32px_rgba(251,191,36,0.35)] backdrop-blur-xl transition-transform active:scale-90 active:bg-amber-300/35 active:border-amber-200 touch-none select-none cursor-pointer"
           >
-            <ArrowBigUp className="h-8 w-8" />
-            <span className="text-[10px] font-semibold tracking-widest uppercase text-amber-200">
+            <ArrowBigUp className="h-8 w-8 text-amber-100" />
+            <span className="text-[10px] font-bold tracking-widest uppercase text-amber-200">
               JUMP
             </span>
           </button>

@@ -57,7 +57,10 @@ export class Engine {
 
   private slideHeld = false;
   private slideImpulseT = 0;
-  private ptrDown: { y: number; t: number } | null = null;
+  private activePointers = new Map<
+    number,
+    { startX: number; startY: number; t: number; role: "slide" | "jump" }
+  >();
   private hasJumped = false;
   private shake = 0;
   private deadReal = 0;
@@ -117,6 +120,10 @@ export class Engine {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     document.removeEventListener("visibilitychange", this.onVis);
+    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
+    this.canvas.removeEventListener("pointermove", this.onPointerMove);
+    this.canvas.removeEventListener("pointerup", this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
   }
 
   getAudio(): AudioEngine {
@@ -178,7 +185,7 @@ export class Engine {
     this.deadReal = 0;
     this.slideHeld = false;
     this.slideImpulseT = 0;
-    this.ptrDown = null;
+    this.activePointers.clear();
     this.startGraceTime = performance.now() + 180;
     this.setState("playing");
   }
@@ -217,6 +224,9 @@ export class Engine {
     this.flies = [];
     this.bloom = null;
     this.timeScale = 1;
+    this.activePointers.clear();
+    this.slideHeld = false;
+    this.slideImpulseT = 0;
     this.setState("menu");
   }
 
@@ -299,29 +309,72 @@ export class Engine {
     if (performance.now() < this.startGraceTime) return;
     e.preventDefault();
     this.audio.ensure();
-    this.ptrDown = { y: e.clientY, t: performance.now() };
-    this.player.pressJump();
-    if (!this.hasJumped) {
-      this.hasJumped = true;
-      this.cb.onFirstJump();
+
+    // Dual-thumb ergonomics:
+    // Left 42% of screen -> SLIDE / DUCK
+    // Right 58% of screen -> JUMP / DOUBLE JUMP
+    const isLeftZone = e.clientX < this.w * 0.42;
+    const role: "slide" | "jump" = isLeftZone ? "slide" : "jump";
+
+    this.activePointers.set(e.pointerId, {
+      startX: e.clientX,
+      startY: e.clientY,
+      t: performance.now(),
+      role,
+    });
+
+    if (role === "slide") {
+      this.slideStart();
+    } else {
+      this.jump();
     }
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    if (this.state !== "playing" || !this.ptrDown) return;
-    const dy = e.clientY - this.ptrDown.y;
-    const dt = performance.now() - this.ptrDown.t;
-    if (dy > 46 && dt < 420) {
-      this.slideImpulseT = 0.55;
-      if (!this.player.grounded) this.player.fastFall = true;
-      this.player.slideImpulse();
-      this.ptrDown = null;
+    if (this.state !== "playing") return;
+    const ptr = this.activePointers.get(e.pointerId);
+    if (!ptr) return;
+
+    // Detect downward swipe gesture to slide or fast-fall even if started in jump zone
+    const dy = e.clientY - ptr.startY;
+    const dt = performance.now() - ptr.t;
+    if (dy > 38 && dt < 480 && ptr.role !== "slide") {
+      ptr.role = "slide";
+      this.player.releaseJump();
+      this.slideStart();
     }
   };
 
-  private onPointerUp = (): void => {
-    this.player.releaseJump();
-    this.ptrDown = null;
+  private onPointerUp = (e: PointerEvent): void => {
+    const ptr = this.activePointers.get(e.pointerId);
+    if (ptr) {
+      this.activePointers.delete(e.pointerId);
+      if (ptr.role === "jump") {
+        let hasOtherJump = false;
+        for (const p of this.activePointers.values()) {
+          if (p.role === "jump") {
+            hasOtherJump = true;
+            break;
+          }
+        }
+        if (!hasOtherJump) {
+          this.releaseJump();
+        }
+      } else if (ptr.role === "slide") {
+        let hasOtherSlide = false;
+        for (const p of this.activePointers.values()) {
+          if (p.role === "slide") {
+            hasOtherSlide = true;
+            break;
+          }
+        }
+        if (!hasOtherSlide) {
+          this.slideEnd();
+        }
+      }
+    } else {
+      this.releaseJump();
+    }
   };
 
   private bind(): void {

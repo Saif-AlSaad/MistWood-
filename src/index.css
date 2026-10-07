@@ -2,17 +2,27 @@
 
 :root {
   color-scheme: dark;
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
 }
 
 html,
 body,
 #root {
   height: 100%;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 body {
   margin: 0;
-  overflow: hidden;
   background: #05070b;
   font-family: "Outfit", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -148,5 +158,20 @@ canvas {
 }
 .animate-fade-in {
   animation: fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes phone-rotate {
+  0%, 15% {
+    transform: rotate(0deg);
+  }
+  45%, 70% {
+    transform: rotate(-90deg);
+  }
+  90%, 100% {
+    transform: rotate(0deg);
+  }
+}
+.animate-phone-rotate {
+  animation: phone-rotate 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 

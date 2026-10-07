@@ -19,6 +19,7 @@ import { ResultsScreen } from "./ui/ResultsScreen";
 import { Garage } from "./ui/Garage";
 import { SettingsModal } from "./ui/SettingsModal";
 import { ToastNotification } from "./ui/ToastNotification";
+import { OrientationPrompt } from "./ui/OrientationPrompt";
 
 export default function MistwoodGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +88,25 @@ export default function MistwoodGame() {
       ("ontouchstart" in window || navigator.maxTouchPoints > 0),
     [],
   );
+
+  // Screen Orientation State
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight > window.innerWidth;
+  });
+  const [dismissedPortrait, setDismissedPortrait] = useState(false);
+
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener("resize", checkOrientation);
+    window.addEventListener("orientationchange", checkOrientation);
+    return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window.removeEventListener("orientationchange", checkOrientation);
+    };
+  }, []);
 
   const activeAnimal = ANIMALS[activeAnimalId] || ANIMALS.fox;
 
@@ -201,6 +221,14 @@ export default function MistwoodGame() {
     setShowSettings(false);
     setHud(null);
     setNearMissToast(null);
+
+    // Attempt to lock landscape orientation on mobile devices
+    try {
+      if (typeof window !== "undefined" && "orientation" in screen && "lock" in screen.orientation) {
+        (screen.orientation as any).lock("landscape").catch(() => {});
+      }
+    } catch {}
+
     engineRef.current?.start();
   }, []);
 
@@ -395,6 +423,20 @@ export default function MistwoodGame() {
           <Check className="h-4 w-4 text-emerald-300" />
           <span>Race recap copied to clipboard! 🦊</span>
         </div>
+      )}
+
+      {/* Landscape Orientation Prompt for Portrait mobile devices */}
+      {isPortrait && !dismissedPortrait && isTouch && (
+        <OrientationPrompt
+          onDismiss={() => setDismissedPortrait(true)}
+          onRotate={() => {
+            try {
+              if (typeof window !== "undefined" && "orientation" in screen && "lock" in screen.orientation) {
+                (screen.orientation as any).lock("landscape").catch(() => {});
+              }
+            } catch {}
+          }}
+        />
       )}
     </div>
   );

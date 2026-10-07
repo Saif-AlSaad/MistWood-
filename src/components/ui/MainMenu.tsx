@@ -41,7 +41,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const animalName = activeAnimal?.name || activePelt?.name || "Red Fox";
   const animalColor = activeAnimal?.colors.accent || activePelt?.accentColor || "#ffd27a";
   return (
-    <div className="absolute inset-0 z-20 flex flex-col items-center justify-between p-6 text-center select-none">
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-between overflow-y-auto px-4 py-3 sm:p-6 text-center select-none"
+      style={{
+        paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))",
+        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+        paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+        paddingRight: "max(1rem, env(safe-area-inset-right, 0px))",
+      }}
+    >
       {/* Top Bar Utilities */}
       <div className="flex w-full items-center justify-between">
         <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3.5 py-1.5 backdrop-blur-md">
@@ -79,7 +87,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </div>
 
       {/* Center Cinematic Title & Main Action */}
-      <div className="flex flex-col items-center my-auto">
+      <div className="flex flex-col items-center my-auto py-2">
         <div className="fade-up flex items-center gap-2 text-amber-200/70">
           <span className="h-px w-8 bg-gradient-to-r from-transparent to-amber-200/50" />
           <span className="text-[11px] font-medium uppercase tracking-[0.45em]">
@@ -88,11 +96,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <span className="h-px w-8 bg-gradient-to-l from-transparent to-amber-200/50" />
         </div>
 
-        <h1 className="fade-up fade-up-1 font-display mt-3 bg-gradient-to-b from-amber-50 via-amber-100 to-teal-200/70 bg-clip-text text-6xl font-bold tracking-[0.12em] text-transparent drop-shadow-[0_4px_40px_rgba(0,0,0,0.8)] sm:text-7xl md:text-8xl">
+        <h1 className="fade-up fade-up-1 font-display mt-2 bg-gradient-to-b from-amber-50 via-amber-100 to-teal-200/70 bg-clip-text text-5xl font-bold tracking-[0.12em] text-transparent drop-shadow-[0_4px_40px_rgba(0,0,0,0.8)] sm:text-7xl md:text-8xl">
           MISTWOOD
         </h1>
 
-        <p className="fade-up fade-up-2 mt-4 max-w-md text-xs font-light leading-relaxed tracking-wide text-white/60 md:text-sm">
+        <p className="fade-up fade-up-2 mt-2 sm:mt-4 max-w-md text-xs font-light leading-relaxed tracking-wide text-white/60 md:text-sm">
           Navigate ancient paths at breakneck speed. Outrun the encroaching mist, leap
           weathered boulders, slip beneath thorny canopies, and attune with forest spirits.
         </p>
