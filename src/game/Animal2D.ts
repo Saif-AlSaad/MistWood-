@@ -1,7 +1,7 @@
 /* MistWood Masterclass 2D Realistic Animal Anatomy, Art & Animation System */
 
 import type { AnimalDefinition } from "./animals";
-import { TAU, clamp, lerp, mix, rgb, hex } from "./types";
+import { TAU, clamp, lerp } from "./types";
 
 export interface AnimalAnimParams {
   time: number;
@@ -19,7 +19,106 @@ export interface AnimalAnimParams {
   flipRotation?: number; // Double jump acrobatic front-flip rotation
 }
 
+class FoxSpriteManager {
+  static idleSheet: HTMLImageElement | null = null;
+  static runSheet: HTMLImageElement | null = null;
+  static jumpSheet: HTMLImageElement | null = null;
+  static crouchSheet: HTMLImageElement | null = null;
+  static initialized = false;
+
+  static init(): void {
+    if (this.initialized || typeof window === "undefined") return;
+    this.idleSheet = new Image();
+    this.idleSheet.src = "/assets/characters/fox/fox_idle.png";
+    this.runSheet = new Image();
+    this.runSheet.src = "/assets/characters/fox/fox_run.png";
+    this.jumpSheet = new Image();
+    this.jumpSheet.src = "/assets/characters/fox/fox_jump.png";
+    this.crouchSheet = new Image();
+    this.crouchSheet.src = "/assets/characters/fox/extra/crouch.png";
+    this.initialized = true;
+  }
+
+  static isReady(): boolean {
+    this.init();
+    return !!(
+      this.idleSheet?.complete &&
+      this.idleSheet.naturalWidth > 0 &&
+      this.runSheet?.complete &&
+      this.runSheet.naturalWidth > 0 &&
+      this.jumpSheet?.complete &&
+      this.jumpSheet.naturalWidth > 0
+    );
+  }
+}
+
 export class Animal2DRenderer {
+  static renderFoxSprite(
+    ctx: CanvasRenderingContext2D,
+    anim: AnimalAnimParams,
+    sx: number,
+    sy: number
+  ): boolean {
+    if (!FoxSpriteManager.isReady()) {
+      return false;
+    }
+
+    const { time, runCycle, speed, isGrounded, vy, isSliding, squash } = anim;
+
+    let sheet: HTMLImageElement;
+    let frameIdx = 0;
+
+    if (isSliding && FoxSpriteManager.crouchSheet?.complete) {
+      sheet = FoxSpriteManager.crouchSheet;
+      frameIdx = 0;
+    } else if (!isGrounded && FoxSpriteManager.jumpSheet) {
+      sheet = FoxSpriteManager.jumpSheet;
+      // 8-frame jump sequence based on ballistics:
+      if (squash > 0.35) {
+        frameIdx = 6; // Landing squash
+      } else if (vy > 400) {
+        frameIdx = 1; // Takeoff leap
+      } else if (vy > 150) {
+        frameIdx = 2; // Rising
+      } else if (vy > -150) {
+        frameIdx = 3; // Apex float
+      } else if (vy > -400) {
+        frameIdx = 4; // Descent
+      } else {
+        frameIdx = 5; // Falling reach
+      }
+    } else if (isGrounded && speed > 20 && FoxSpriteManager.runSheet) {
+      sheet = FoxSpriteManager.runSheet;
+      frameIdx = Math.floor(runCycle * 8) % 8;
+    } else if (FoxSpriteManager.idleSheet) {
+      sheet = FoxSpriteManager.idleSheet;
+      frameIdx = Math.floor(time * 8) % 8;
+    } else {
+      return false;
+    }
+
+    ctx.save();
+    ctx.scale(sx, sy);
+
+    // Uniform 128x128 frame parameters:
+    // Foot baseline is at y = 112, center is at x = 64
+    // 0.72 scale fits the 50px hitbox and ~48px body height in MistWood
+    const spriteScale = 0.72;
+    const drawW = 128 * spriteScale;
+    const drawH = 128 * spriteScale;
+    const drawX = -64 * spriteScale;
+    const drawY = -112 * spriteScale;
+
+    if (sheet === FoxSpriteManager.crouchSheet) {
+      ctx.drawImage(sheet, 0, 0, 128, 128, drawX, drawY, drawW, drawH);
+    } else {
+      ctx.drawImage(sheet, frameIdx * 128, 0, 128, 128, drawX, drawY, drawW, drawH);
+    }
+
+    ctx.restore();
+    return true;
+  }
+
   /** Renders a realistic 2D quadruped animal with anatomical accuracy, layered fur markings, and dynamic gait */
   static render(
     ctx: CanvasRenderingContext2D,
@@ -62,6 +161,12 @@ export class Animal2DRenderer {
     }
     // Inspection horizontal tilt compression
     sx *= 1 - Math.abs(inspectTilt) * 0.12;
+
+    // 2D Cartoon Fox Sprite Integration:
+    if (id === "fox" && Animal2DRenderer.renderFoxSprite(ctx, anim, sx, sy)) {
+      ctx.restore();
+      return;
+    }
 
     ctx.scale(sx, sy);
 
