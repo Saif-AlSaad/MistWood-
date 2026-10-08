@@ -91,17 +91,17 @@ export const Speedometer: React.FC<SpeedometerProps> = ({ speedKmh }) => {
       {/* Speedometer digital readout */}
       <div className="flex flex-col">
         <div className="flex items-baseline gap-1">
-          <span className="font-display text-2xl font-bold tracking-tight text-white md:text-3xl tabular-nums">
+          <span className="font-hud text-2xl font-bold tracking-tight text-white md:text-3xl tabular-nums">
             {speedKmh}
           </span>
-          <span className="text-[10px] font-semibold tracking-widest text-amber-200/70 uppercase">
+          <span className="font-game text-[10px] font-bold tracking-widest text-amber-200/80 uppercase">
             KM/H
           </span>
         </div>
 
         <div className="flex items-center gap-1.5 mt-0.5">
           <span
-            className={`rounded-full border px-1.5 py-0.2 text-[9px] font-medium tracking-wider uppercase ${tier.color}`}
+            className={`font-game rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase ${tier.color}`}
           >
             {tier.label}
           </span>

@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Smartphone,
   Sparkles,
+  Type,
   Volume1,
   Volume2,
   VolumeX,
@@ -57,7 +58,7 @@ function SegmentedToggle<T extends string | boolean>({
               onClickSound?.();
               onChange(opt.value);
             }}
-            className={`min-w-[50px] rounded-lg px-2.5 py-1 text-xs font-bold transition-all duration-200 cursor-pointer ${
+            className={`min-w-[50px] rounded-lg px-2.5 py-1 font-game text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
               isActive
                 ? "bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 shadow-[0_2px_12px_rgba(251,191,36,0.35)] scale-[1.02]"
                 : "text-white/45 hover:text-white/80 hover:bg-white/5 active:scale-95"
@@ -87,7 +88,7 @@ function SettingRow({
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300/20 bg-amber-400/10 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.1)]">
           <Icon className="h-4 w-4" />
         </div>
-        <div className="text-xs font-semibold tracking-wide text-white">{title}</div>
+        <div className="font-game text-xs font-bold tracking-wide text-white uppercase">{title}</div>
       </div>
       <div>{children}</div>
     </div>
@@ -224,7 +225,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClickSound?.();
                 setActiveTab("audio");
               }}
-              className={`flex items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-2 rounded-xl py-2 font-game text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                 activeTab === "audio"
                   ? "bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 shadow-[0_2px_12px_rgba(251,191,36,0.3)] scale-[1.01]"
                   : "text-white/60 hover:bg-white/5 hover:text-white"
@@ -241,7 +242,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClickSound?.();
                 setActiveTab("graphics");
               }}
-              className={`flex items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-2 rounded-xl py-2 font-game text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                 activeTab === "graphics"
                   ? "bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 shadow-[0_2px_12px_rgba(251,191,36,0.3)] scale-[1.01]"
                   : "text-white/60 hover:bg-white/5 hover:text-white"
@@ -258,7 +259,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClickSound?.();
                 setActiveTab("controls");
               }}
-              className={`flex items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer ${
+              className={`flex items-center justify-center gap-2 rounded-xl py-2 font-game text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer ${
                 activeTab === "controls"
                   ? "bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 shadow-[0_2px_12px_rgba(251,191,36,0.3)] scale-[1.01]"
                   : "text-white/60 hover:bg-white/5 hover:text-white"
@@ -550,6 +551,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     Cinematic
                   </button>
+                </div>
+              </div>
+
+              {/* Game Typography Theme */}
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-colors hover:border-white/20">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-400/10 text-amber-300">
+                      <Type className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-game text-xs font-bold tracking-wide text-white uppercase">
+                        Typography Theme
+                      </div>
+                      <div className="text-[10px] text-white/50">
+                        {settings.fontTheme === "elder"
+                          ? "Cinzel & Elder Classical Lore"
+                          : settings.fontTheme === "arcade"
+                          ? "Rajdhani Athletic Racing Display"
+                          : settings.fontTheme === "tactical"
+                          ? "Oxanium Tactical HUD Telemetry"
+                          : "Cinzel & Oxanium (AAA Mythic)"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-black/40 p-1">
+                  {[
+                    { label: "MYTHIC", value: "mythic" as const },
+                    { label: "ELDER", value: "elder" as const },
+                    { label: "ARCADE", value: "arcade" as const },
+                    { label: "TACTICAL", value: "tactical" as const },
+                  ].map((f) => (
+                    <button
+                      key={f.value}
+                      type="button"
+                      onMouseEnter={onHover}
+                      onClick={() => {
+                        onClickSound?.();
+                        onUpdateSettings({ fontTheme: f.value });
+                      }}
+                      className={`rounded-lg py-1.5 text-[10px] font-game font-bold tracking-wider uppercase transition-all duration-150 cursor-pointer ${
+                        (settings.fontTheme ?? "mythic") === f.value
+                          ? "bg-amber-400 text-stone-950 font-black shadow-[0_0_10px_rgba(251,191,36,0.35)]"
+                          : "text-white/60 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

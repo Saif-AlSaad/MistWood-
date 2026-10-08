@@ -131,6 +131,8 @@ export interface HUDData {
   nearMissCount: number;
 }
 
+export type FontTheme = "mythic" | "elder" | "arcade" | "tactical";
+
 export interface GameSettings {
   masterVolume: number;
   sfxVolume: number;
@@ -140,6 +142,7 @@ export interface GameSettings {
   particleIntensity: "high" | "low";
   speedEffects: boolean;
   haptics?: boolean;
+  fontTheme?: FontTheme;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -151,6 +154,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   particleIntensity: "high",
   speedEffects: true,
   haptics: true,
+  fontTheme: "mythic",
 };
 
 export const SETTINGS_STORAGE_KEY = "mistwood_settings";

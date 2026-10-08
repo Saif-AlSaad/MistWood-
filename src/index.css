@@ -6,6 +6,55 @@
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
+
+  /* AAA Game Typography System (Default: Mythic Forest) */
+  --font-display: "Cinzel", "Cinzel Decorative", Georgia, serif;
+  --font-title: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --font-hud: "Oxanium", "Rajdhani", monospace, sans-serif;
+  --font-game: "Rajdhani", "Plus Jakarta Sans", sans-serif;
+  --font-body: "Plus Jakarta Sans", "Rajdhani", system-ui, sans-serif;
+}
+
+/* Dynamic Font Themes */
+[data-font-theme="mythic"],
+:root {
+  --font-display: "Cinzel", "Cinzel Decorative", Georgia, serif;
+  --font-title: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --font-hud: "Oxanium", "Rajdhani", monospace, sans-serif;
+  --font-game: "Rajdhani", "Plus Jakarta Sans", sans-serif;
+  --font-body: "Plus Jakarta Sans", "Rajdhani", system-ui, sans-serif;
+}
+
+[data-font-theme="elder"] {
+  --font-display: "Cinzel", Georgia, serif;
+  --font-title: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --font-hud: "Cinzel", Georgia, serif;
+  --font-game: "Cinzel", Georgia, serif;
+  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+[data-font-theme="arcade"] {
+  --font-display: "Rajdhani", sans-serif;
+  --font-title: "Rajdhani", sans-serif;
+  --font-hud: "Oxanium", monospace, sans-serif;
+  --font-game: "Rajdhani", sans-serif;
+  --font-body: "Rajdhani", system-ui, sans-serif;
+}
+
+[data-font-theme="tactical"] {
+  --font-display: "Oxanium", monospace, sans-serif;
+  --font-title: "Oxanium", monospace, sans-serif;
+  --font-hud: "Oxanium", monospace, sans-serif;
+  --font-game: "Oxanium", monospace, sans-serif;
+  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+@theme {
+  --font-display: var(--font-display);
+  --font-title: var(--font-title);
+  --font-hud: var(--font-hud);
+  --font-game: var(--font-game);
+  --font-body: var(--font-body);
 }
 
 html,
@@ -24,13 +73,26 @@ body,
 body {
   margin: 0;
   background: #05070b;
-  font-family: "Outfit", system-ui, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 .font-display {
-  font-family: "Marcellus", Georgia, serif;
+  font-family: var(--font-display);
+}
+
+.font-title {
+  font-family: var(--font-title);
+}
+
+.font-hud {
+  font-family: var(--font-hud);
+  font-feature-settings: "tnum" 1;
+}
+
+.font-game {
+  font-family: var(--font-game);
 }
 
 canvas {

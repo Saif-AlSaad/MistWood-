@@ -32,7 +32,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
         <h2 className="font-display text-2xl font-bold tracking-[0.25em] text-white uppercase">
           PAUSED
         </h2>
-        <p className="mt-1 text-[11px] font-medium tracking-widest text-white/45 uppercase">
+        <p className="font-game mt-1 text-[11px] font-semibold tracking-widest text-white/50 uppercase">
           The forest holds its breath
         </p>
 
@@ -40,19 +40,19 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
         {hud && (
           <div className="mt-5 grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
             <div>
-              <span className="text-[10px] font-semibold text-white/40 uppercase">
+              <span className="font-game text-[10px] font-bold text-white/40 uppercase tracking-wider">
                 Distance
               </span>
-              <div className="text-sm font-bold text-white tabular-nums">
-                {hud.dist} m
+              <div className="font-hud text-sm font-bold text-white tabular-nums">
+                {hud.dist} <span className="font-game text-xs text-white/60">m</span>
               </div>
             </div>
             <div>
-              <span className="text-[10px] font-semibold text-white/40 uppercase">
+              <span className="font-game text-[10px] font-bold text-white/40 uppercase tracking-wider">
                 Velocity
               </span>
-              <div className="text-sm font-bold text-cyan-200 tabular-nums">
-                {hud.speedKmh} KM/H
+              <div className="font-hud text-sm font-bold text-cyan-200 tabular-nums">
+                {hud.speedKmh} <span className="font-game text-xs text-cyan-300/70">KM/H</span>
               </div>
             </div>
           </div>
@@ -68,7 +68,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               onResume();
             }}
             onMouseEnter={onHover}
-            className="flex items-center justify-center gap-2.5 rounded-2xl bg-amber-100 py-3 text-xs font-bold tracking-widest text-stone-950 uppercase shadow-[0_4px_20px_rgba(255,210,122,0.35)] transition-all hover:scale-[1.02] hover:bg-white active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2.5 rounded-2xl bg-amber-100 py-3 font-game text-xs font-bold tracking-widest text-stone-950 uppercase shadow-[0_4px_20px_rgba(255,210,122,0.35)] transition-all hover:scale-[1.02] hover:bg-white active:scale-95 cursor-pointer"
           >
             <Play className="h-4 w-4 fill-stone-950" />
             RESUME
@@ -82,7 +82,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               onRestart();
             }}
             onMouseEnter={onHover}
-            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/5 py-3 text-xs font-semibold tracking-wider text-white transition-all hover:bg-white/15 active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/5 py-3 font-game text-xs font-bold tracking-wider text-white uppercase transition-all hover:bg-white/15 active:scale-95 cursor-pointer"
           >
             <RotateCcw className="h-4 w-4" />
             RESTART RUN
@@ -96,7 +96,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               onOpenSettings();
             }}
             onMouseEnter={onHover}
-            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] py-2.5 text-xs font-semibold tracking-wider text-white/80 transition-all hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] py-2.5 font-game text-xs font-bold tracking-wider text-white/80 uppercase transition-all hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
           >
             <Settings className="h-4 w-4" />
             SETTINGS
@@ -110,14 +110,14 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               onMainMenu();
             }}
             onMouseEnter={onHover}
-            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-transparent py-2.5 text-xs font-medium tracking-wider text-white/60 transition-all hover:bg-white/5 hover:text-white active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-transparent py-2.5 font-game text-xs font-bold tracking-wider text-white/60 uppercase transition-all hover:bg-white/5 hover:text-white active:scale-95 cursor-pointer"
           >
             <Trees className="h-4 w-4" />
             MAIN MENU
           </button>
         </div>
 
-        <span className="mt-4 text-[10px] font-medium tracking-wider text-white/30 uppercase">
+        <span className="font-game mt-4 text-[10px] font-semibold tracking-wider text-white/30 uppercase">
           ESC or P to Resume
         </span>
       </div>

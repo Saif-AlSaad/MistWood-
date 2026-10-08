@@ -15,7 +15,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ toast }) =
     >
       <div className="flex items-center justify-center gap-2 text-amber-200/80 mb-1">
         <Compass className="h-3.5 w-3.5" />
-        <span className="text-[10px] font-semibold tracking-[0.3em] uppercase">
+        <span className="font-game text-[10px] font-bold tracking-[0.3em] uppercase text-amber-200/90">
           ENTERING BIOME
         </span>
       </div>
@@ -24,7 +24,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({ toast }) =
         {toast.name}
       </div>
 
-      <div className="mt-1 text-[11px] font-medium tracking-[0.25em] text-amber-100/70 uppercase">
+      <div className="font-game mt-1 text-[11px] font-semibold tracking-[0.25em] text-amber-100/70 uppercase">
         {toast.line}
       </div>
     </div>

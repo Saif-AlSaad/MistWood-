@@ -63,10 +63,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       >
         <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/45 px-4 py-2 text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-md">
           <div className="flex items-baseline gap-1">
-            <span className="font-display text-2xl font-bold tracking-tight text-white md:text-3xl tabular-nums">
+            <span className="font-hud text-2xl font-bold tracking-tight text-white md:text-3xl tabular-nums">
               {dist}
             </span>
-            <span className="text-[11px] font-semibold tracking-widest text-amber-200/70 uppercase">
+            <span className="font-game text-[11px] font-bold tracking-widest text-amber-200/80 uppercase">
               m
             </span>
           </div>
@@ -76,7 +76,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {/* Best distance record display */}
           <div className="flex items-center gap-1.5 text-amber-200/80" title={`Personal Best: ${best}m`}>
             <Trophy className="h-3.5 w-3.5 text-amber-300" />
-            <span className="text-xs font-medium tabular-nums text-white/90">
+            <span className="font-hud text-xs font-semibold tabular-nums text-white/90">
               {Math.max(best, dist)}m
             </span>
           </div>
@@ -87,7 +87,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <span className="h-4 w-px bg-white/20" />
               <div className="flex items-center gap-1 text-emerald-300" title="Close Calls">
                 <Zap className="h-3.5 w-3.5 fill-emerald-300/30" />
-                <span className="text-xs font-semibold tabular-nums">
+                <span className="font-hud text-xs font-bold tabular-nums">
                   {nearMissCount}
                 </span>
               </div>
@@ -106,7 +106,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         {/* Biome progress meter */}
         <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 backdrop-blur-md shadow-md">
           <Compass className="h-3.5 w-3.5 text-amber-200/80 shrink-0" />
-          <span className="text-[11px] font-semibold tracking-[0.2em] text-white/90 uppercase">
+          <span className="font-display text-[11px] font-bold tracking-[0.2em] text-white/90 uppercase">
             {hud?.biomeName ?? "Golden Dawn"}
           </span>
 
@@ -117,22 +117,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             />
           </div>
 
-          <span className="hidden text-[10px] font-medium tracking-wider text-white/40 uppercase sm:inline">
+          <span className="font-display hidden text-[10px] font-semibold tracking-wider text-white/40 uppercase sm:inline">
             ➔ {hud?.biomeNext ?? "Quiet Midday"}
           </span>
         </div>
 
         {/* Spirit veil / ghost bloom active indicator */}
         {ghostT > 0 && (
-          <div className="animate-pulse flex items-center gap-2 rounded-full border border-cyan-400/50 bg-cyan-950/70 px-4 py-1 text-[11px] font-medium tracking-widest text-cyan-200 shadow-[0_0_25px_rgba(34,211,238,0.45)] backdrop-blur-md">
+          <div className="animate-pulse flex items-center gap-2 rounded-full border border-cyan-400/50 bg-cyan-950/70 px-4 py-1 font-game text-[11px] font-bold tracking-widest text-cyan-200 shadow-[0_0_25px_rgba(34,211,238,0.45)] backdrop-blur-md">
             <Shield className="h-3.5 w-3.5 text-cyan-300" />
-            <span>SPIRIT VEIL · {ghostT.toFixed(1)}s</span>
+            <span>SPIRIT VEIL · <span className="font-hud">{ghostT.toFixed(1)}s</span></span>
           </div>
         )}
 
         {/* Near miss popup toast */}
         {nearMissToast && (
-          <div className="animate-nearmiss flex items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-500/25 px-3.5 py-1 text-[11px] font-medium tracking-wider text-amber-100 shadow-[0_0_25px_rgba(251,191,36,0.45)] backdrop-blur-md">
+          <div className="animate-nearmiss flex items-center gap-1.5 rounded-full border border-amber-300/50 bg-amber-500/25 px-3.5 py-1 font-game text-[11px] font-bold tracking-wider text-amber-100 shadow-[0_0_25px_rgba(251,191,36,0.45)] backdrop-blur-md">
             <Zap className="h-3.5 w-3.5 fill-amber-300/30 text-amber-300" />
             <span>CLOSE CALL! +1 FIREFLY</span>
           </div>
@@ -150,7 +150,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         {/* Fireflies currency */}
         <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-black/45 px-3.5 py-2 text-amber-300 backdrop-blur-md shadow-md">
           <Sparkles className="h-4 w-4 fill-amber-300/30" />
-          <span className="font-sans text-sm font-semibold tracking-wide text-amber-100 tabular-nums">
+          <span className="font-hud text-sm font-bold tracking-wide text-amber-100 tabular-nums">
             {flies}
           </span>
         </div>
@@ -227,7 +227,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             }`}
           />
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold tracking-widest uppercase">
+            <span className="font-game text-[10px] font-bold tracking-widest uppercase">
               {ghostT > 0 ? "VEIL ACTIVE" : "SPIRIT VEIL"}
             </span>
             <span className="text-[9px] font-medium text-white/40">
@@ -280,7 +280,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-white/20 bg-black/60 text-amber-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-transform active:scale-90 active:bg-amber-500/25 active:border-amber-300/50 touch-none select-none cursor-pointer"
           >
             <ArrowBigDown className="h-8 w-8 text-amber-200" />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-white/90">
+            <span className="font-game text-[10px] font-bold tracking-widest uppercase text-white/90">
               SLIDE
             </span>
           </button>
@@ -318,7 +318,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             className="pointer-events-auto flex h-20 w-20 flex-col items-center justify-center rounded-3xl border border-amber-300/40 bg-amber-400/20 text-amber-100 shadow-[0_8px_32px_rgba(251,191,36,0.35)] backdrop-blur-xl transition-transform active:scale-90 active:bg-amber-300/35 active:border-amber-200 touch-none select-none cursor-pointer"
           >
             <ArrowBigUp className="h-8 w-8 text-amber-100" />
-            <span className="text-[10px] font-bold tracking-widest uppercase text-amber-200">
+            <span className="font-game text-[10px] font-bold tracking-widest uppercase text-amber-200">
               JUMP
             </span>
           </button>

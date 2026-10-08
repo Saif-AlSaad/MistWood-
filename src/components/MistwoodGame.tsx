@@ -147,6 +147,12 @@ export default function MistwoodGame() {
     engineRef.current?.applySettings(DEFAULT_SETTINGS);
   }, []);
 
+  // Synchronize dynamic game font theme to root DOM
+  useEffect(() => {
+    const theme = settings.fontTheme || "mythic";
+    document.documentElement.setAttribute("data-font-theme", theme);
+  }, [settings.fontTheme]);
+
   // Engine Lifecycle
   useEffect(() => {
     const canvas = canvasRef.current;

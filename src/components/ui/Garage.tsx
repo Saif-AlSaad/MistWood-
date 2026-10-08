@@ -168,7 +168,7 @@ export const Garage: React.FC<GarageProps> = ({
             <div>
               <div className="flex items-center gap-1.5 text-amber-200/70">
                 <Sparkles className="h-3 w-3" />
-                <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.25em] uppercase">
+                <span className="font-game text-[9px] sm:text-[10px] font-bold tracking-[0.25em] uppercase">
                   SANCTUARY RUNNER GARAGE
                 </span>
               </div>
@@ -181,10 +181,10 @@ export const Garage: React.FC<GarageProps> = ({
           {/* Essence Balance Badge */}
           <div className="flex items-center gap-2 rounded-2xl border border-amber-300/35 bg-amber-400/10 px-3.5 py-1.5 sm:px-4 sm:py-2 text-amber-200 backdrop-blur-md shadow-[0_0_20px_rgba(251,191,36,0.15)]">
             <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-amber-300/40 text-amber-300" />
-            <span className="font-sans text-xs sm:text-sm font-bold tracking-wide tabular-nums text-white">
+            <span className="font-hud text-xs sm:text-sm font-bold tracking-wide tabular-nums text-white">
               {totalFlies}
             </span>
-            <span className="text-[9px] sm:text-[10px] font-semibold tracking-wider text-amber-200/70 uppercase">
+            <span className="font-game text-[9px] sm:text-[10px] font-bold tracking-wider text-amber-200/70 uppercase">
               Essence
             </span>
           </div>
@@ -219,12 +219,12 @@ export const Garage: React.FC<GarageProps> = ({
             <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center text-center">
               <div className="flex items-center gap-2">
                 <span
-                  className={`rounded-full border px-2.5 py-0.5 text-[9px] font-bold tracking-widest uppercase backdrop-blur-md ${rarity.badgeClass}`}
+                  className={`font-game rounded-full border px-2.5 py-0.5 text-[9px] font-bold tracking-widest uppercase backdrop-blur-md ${rarity.badgeClass}`}
                 >
                   {rarity.label}
                 </span>
                 {isEquipped && (
-                  <span className="flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-0.5 text-[9px] font-bold tracking-widest text-emerald-300 uppercase backdrop-blur-md">
+                  <span className="font-game flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-0.5 text-[9px] font-bold tracking-widest text-emerald-300 uppercase backdrop-blur-md">
                     <Check className="h-2.5 w-2.5" /> EQUIPPED
                   </span>
                 )}
@@ -232,24 +232,24 @@ export const Garage: React.FC<GarageProps> = ({
               <h1 className="font-display mt-1 text-2xl sm:text-3xl font-bold tracking-wide text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.8)]">
                 {selectedAnimal.name}
               </h1>
-              <p className="text-[11px] font-medium tracking-[0.25em] text-amber-200/80 uppercase drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+              <p className="font-game text-[11px] font-semibold tracking-[0.25em] text-amber-200/80 uppercase drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
                 {selectedAnimal.title}
               </p>
             </div>
 
             {/* Compact Floating Stats Panel (Top Left) */}
             <div className="pointer-events-none absolute top-4 left-4 z-10 hidden sm:flex flex-col gap-1.5 w-44 rounded-2xl border border-white/10 bg-black/50 p-3 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.7)]">
-              <span className="text-[9px] font-bold tracking-[0.2em] text-white/50 uppercase mb-0.5">
+              <span className="font-game text-[9px] font-bold tracking-[0.2em] text-white/50 uppercase mb-0.5">
                 PHYSICS PROFILE
               </span>
 
               {/* Speed Bar */}
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[10px] font-semibold">
-                  <span className="flex items-center gap-1 text-white/70">
+                  <span className="font-game flex items-center gap-1 text-white/70">
                     <Wind className="h-2.5 w-2.5 text-cyan-300" /> SPEED
                   </span>
-                  <span className="tabular-nums text-white/90">{selectedAnimal.stats.speed}/10</span>
+                  <span className="font-hud tabular-nums font-bold text-white/90">{selectedAnimal.stats.speed}/10</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                   <div
@@ -262,10 +262,10 @@ export const Garage: React.FC<GarageProps> = ({
               {/* Agility Bar */}
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[10px] font-semibold">
-                  <span className="flex items-center gap-1 text-white/70">
+                  <span className="font-game flex items-center gap-1 text-white/70">
                     <Zap className="h-2.5 w-2.5 text-amber-300" /> AGILITY
                   </span>
-                  <span className="tabular-nums text-white/90">{selectedAnimal.stats.agility}/10</span>
+                  <span className="font-hud tabular-nums font-bold text-white/90">{selectedAnimal.stats.agility}/10</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                   <div
@@ -278,10 +278,10 @@ export const Garage: React.FC<GarageProps> = ({
               {/* Jump Bar */}
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[10px] font-semibold">
-                  <span className="flex items-center gap-1 text-white/70">
+                  <span className="font-game flex items-center gap-1 text-white/70">
                     <ArrowUpRight className="h-2.5 w-2.5 text-emerald-300" /> JUMP
                   </span>
-                  <span className="tabular-nums text-white/90">{selectedAnimal.stats.jump}/10</span>
+                  <span className="font-hud tabular-nums font-bold text-white/90">{selectedAnimal.stats.jump}/10</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                   <div
@@ -294,10 +294,10 @@ export const Garage: React.FC<GarageProps> = ({
               {/* Power / Mass Bar */}
               <div className="flex flex-col gap-0.5">
                 <div className="flex justify-between text-[10px] font-semibold">
-                  <span className="flex items-center gap-1 text-white/70">
+                  <span className="font-game flex items-center gap-1 text-white/70">
                     <Shield className="h-2.5 w-2.5 text-purple-300" /> MASS / PWR
                   </span>
-                  <span className="tabular-nums text-white/90">{selectedAnimal.stats.power}/10</span>
+                  <span className="font-hud tabular-nums font-bold text-white/90">{selectedAnimal.stats.power}/10</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                   <div
@@ -307,9 +307,9 @@ export const Garage: React.FC<GarageProps> = ({
                 </div>
               </div>
 
-              <div className="mt-1 flex items-center justify-between text-[9px] text-white/40 pt-1 border-t border-white/5">
-                <span>Mass: {selectedAnimal.physics.mass} kg</span>
-                <span>Stride: {selectedAnimal.physics.strideLength} px</span>
+              <div className="mt-1 flex items-center justify-between font-game text-[10px] font-semibold text-white/50 pt-1 border-t border-white/5">
+                <span>Mass: <span className="font-hud">{selectedAnimal.physics.mass}</span> kg</span>
+                <span>Stride: <span className="font-hud">{selectedAnimal.physics.strideLength}</span> px</span>
               </div>
             </div>
 
@@ -317,14 +317,14 @@ export const Garage: React.FC<GarageProps> = ({
             <div className="pointer-events-none absolute top-4 right-4 z-10 hidden sm:flex flex-col gap-1 max-w-[210px] rounded-2xl border border-white/10 bg-black/50 p-3 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.7)] text-left">
               <div className="flex items-center gap-1.5 text-amber-300">
                 <Zap className="h-3 w-3" />
-                <span className="text-[9px] font-bold tracking-wider uppercase">
+                <span className="font-game text-[9px] font-bold tracking-wider uppercase">
                   ANIMAL TRAIT
                 </span>
               </div>
-              <p className="text-[11px] font-medium leading-snug text-white/90">
+              <p className="font-game text-xs font-semibold leading-snug text-white/90">
                 {selectedAnimal.perk}
               </p>
-              <p className="mt-1 text-[10px] font-light leading-relaxed text-white/55">
+              <p className="mt-1 text-[10px] font-normal leading-relaxed text-white/60">
                 {selectedAnimal.description}
               </p>
             </div>
@@ -381,7 +381,7 @@ export const Garage: React.FC<GarageProps> = ({
                     </span>
 
                     {/* Rarity & Status */}
-                    <div className="mt-1 flex items-center justify-center text-[9px] font-semibold uppercase">
+                    <div className="font-game mt-1 flex items-center justify-center text-[9px] font-bold uppercase">
                       {equipped ? (
                         <span className="text-emerald-400 font-bold">EQUIPPED</span>
                       ) : unlocked ? (
@@ -389,7 +389,7 @@ export const Garage: React.FC<GarageProps> = ({
                       ) : (
                         <div className="flex items-center gap-1 text-amber-300">
                           <Lock className="h-2.5 w-2.5" />
-                          <span className="tabular-nums font-bold">{animal.cost}</span>
+                          <span className="font-hud tabular-nums font-bold">{animal.cost}</span>
                         </div>
                       )}
                     </div>
@@ -403,14 +403,14 @@ export const Garage: React.FC<GarageProps> = ({
               {isEquipped ? (
                 <button
                   disabled
-                  className="flex w-full max-w-md items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/15 py-3 text-xs sm:text-sm font-bold tracking-[0.2em] text-emerald-200 uppercase cursor-default shadow-[0_0_25px_rgba(16,185,129,0.2)]"
+                  className="flex w-full max-w-md items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/15 py-3 font-game text-xs sm:text-sm font-bold tracking-[0.2em] text-emerald-200 uppercase cursor-default shadow-[0_0_25px_rgba(16,185,129,0.2)]"
                 >
                   <Check className="h-4 w-4" /> EQUIPPED IN RUNNER
                 </button>
               ) : isUnlocked ? (
                 <button
                   onClick={handleAction}
-                  className="flex w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 py-3 text-xs sm:text-sm font-bold tracking-[0.25em] text-stone-950 uppercase shadow-[0_4px_30px_rgba(255,210,122,0.5)] transition-all duration-300 hover:scale-[1.02] hover:bg-white active:scale-95 cursor-pointer"
+                  className="flex w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 py-3 font-game text-xs sm:text-sm font-bold tracking-[0.25em] text-stone-950 uppercase shadow-[0_4px_30px_rgba(255,210,122,0.5)] transition-all duration-300 hover:scale-[1.02] hover:bg-white active:scale-95 cursor-pointer"
                 >
                   SELECT & EQUIP ANIMAL
                 </button>
@@ -418,7 +418,7 @@ export const Garage: React.FC<GarageProps> = ({
                 <button
                   disabled={!canAfford}
                   onClick={handleAction}
-                  className={`flex w-full max-w-md items-center justify-center gap-2 rounded-2xl py-3 text-xs sm:text-sm font-bold tracking-[0.2em] uppercase transition-all duration-300 ${
+                  className={`flex w-full max-w-md items-center justify-center gap-2 rounded-2xl py-3 font-game text-xs sm:text-sm font-bold tracking-[0.2em] uppercase transition-all duration-300 ${
                     canAfford
                       ? "bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-stone-950 shadow-[0_4px_30px_rgba(251,191,36,0.5)] hover:scale-[1.02] hover:bg-white active:scale-95 cursor-pointer"
                       : "border border-white/10 bg-white/5 text-white/35 cursor-not-allowed"

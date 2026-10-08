@@ -31,7 +31,7 @@ export const OrientationPrompt: React.FC<OrientationPromptProps> = ({
         <div className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 h-28 w-28 rounded-full bg-amber-400/15 blur-2xl" />
 
         {/* Top Forest Tag */}
-        <div className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-3.5 py-1 text-[10px] font-semibold tracking-[0.25em] text-amber-200 uppercase">
+        <div className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-3.5 py-1 font-game text-[10px] font-bold tracking-[0.25em] text-amber-200 uppercase">
           <Trees className="h-3 w-3 text-amber-300" />
           <span>WIDESCREEN RUNNER</span>
         </div>
@@ -59,7 +59,7 @@ export const OrientationPrompt: React.FC<OrientationPromptProps> = ({
         </h2>
 
         {/* Description */}
-        <p className="mt-2 text-xs font-light leading-relaxed tracking-wide text-white/65">
+        <p className="mt-2 text-xs font-normal leading-relaxed tracking-wide text-white/65">
           Mistwood is built for wide panoramic vision. Turn your device horizontally to spot ancient boulders, vines, and spirit blooms in time.
         </p>
 
@@ -68,7 +68,7 @@ export const OrientationPrompt: React.FC<OrientationPromptProps> = ({
           <button
             type="button"
             onClick={handleAttemptRotate}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 py-3.5 text-xs font-bold tracking-[0.2em] text-stone-950 uppercase shadow-[0_4px_25px_rgba(255,210,122,0.45)] transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 py-3.5 font-game text-xs font-bold tracking-[0.2em] text-stone-950 uppercase shadow-[0_4px_25px_rgba(255,210,122,0.45)] transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
           >
             <Compass className="h-4 w-4" />
             ROTATE SCREEN
@@ -77,7 +77,7 @@ export const OrientationPrompt: React.FC<OrientationPromptProps> = ({
           <button
             type="button"
             onClick={onDismiss}
-            className="flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 py-2.5 text-[11px] font-semibold tracking-wider text-white/60 transition-all hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
+            className="flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 py-2.5 font-game text-[11px] font-bold tracking-wider text-white/70 uppercase transition-all hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
           >
             Continue in Portrait Anyway
           </button>
