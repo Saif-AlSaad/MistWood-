@@ -19,6 +19,12 @@ export interface AnimalAnimParams {
   flipRotation?: number; // Double jump acrobatic front-flip rotation
 }
 
+function getFoxAssetUrl(path: string): string {
+  const base = ((import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || "./").replace(/\/?$/, "/");
+  const cleanPath = path.replace(/^\.?\//, "");
+  return `${base}${cleanPath}`;
+}
+
 class FoxSpriteManager {
   static idleSheet: HTMLImageElement | null = null;
   static runSheet: HTMLImageElement | null = null;
@@ -26,30 +32,39 @@ class FoxSpriteManager {
   static crouchSheet: HTMLImageElement | null = null;
   static initialized = false;
 
+  private static loadSheet(path: string): HTMLImageElement {
+    const img = new Image();
+    const resolved = getFoxAssetUrl(path);
+    img.src = resolved;
+    img.onerror = () => {
+      // Fallback in case relative path resolution is mismatched in hosting context
+      const fallback = path.startsWith("/") ? path : `/${path}`;
+      if (img.src !== fallback && !img.src.endsWith(path)) {
+        img.src = fallback;
+      }
+    };
+    return img;
+  }
+
   static init(): void {
     if (this.initialized || typeof window === "undefined") return;
-    this.idleSheet = new Image();
-    this.idleSheet.src = "/assets/characters/fox/fox_idle.png";
-    this.runSheet = new Image();
-    this.runSheet.src = "/assets/characters/fox/fox_run.png";
-    this.jumpSheet = new Image();
-    this.jumpSheet.src = "/assets/characters/fox/fox_jump.png";
-    this.crouchSheet = new Image();
-    this.crouchSheet.src = "/assets/characters/fox/extra/crouch.png";
+    this.idleSheet = this.loadSheet("assets/characters/fox/fox_idle.png");
+    this.runSheet = this.loadSheet("assets/characters/fox/fox_run.png");
+    this.jumpSheet = this.loadSheet("assets/characters/fox/fox_jump.png");
+    this.crouchSheet = this.loadSheet("assets/characters/fox/extra/crouch.png");
     this.initialized = true;
   }
 
   static isReady(): boolean {
     this.init();
-    return !!(
-      this.idleSheet?.complete &&
-      this.idleSheet.naturalWidth > 0 &&
-      this.runSheet?.complete &&
-      this.runSheet.naturalWidth > 0 &&
-      this.jumpSheet?.complete &&
-      this.jumpSheet.naturalWidth > 0
-    );
+    // At minimum, idleSheet must be loaded to render the sprite fox
+    return !!(this.idleSheet?.complete && this.idleSheet.naturalWidth > 0);
   }
+}
+
+// Preload immediately in browser context
+if (typeof window !== "undefined") {
+  FoxSpriteManager.init();
 }
 
 export class Animal2DRenderer {
@@ -68,10 +83,10 @@ export class Animal2DRenderer {
     let sheet: HTMLImageElement;
     let frameIdx = 0;
 
-    if (isSliding && FoxSpriteManager.crouchSheet?.complete) {
+    if (isSliding && FoxSpriteManager.crouchSheet?.complete && FoxSpriteManager.crouchSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.crouchSheet;
       frameIdx = 0;
-    } else if (!isGrounded && FoxSpriteManager.jumpSheet) {
+    } else if (!isGrounded && FoxSpriteManager.jumpSheet?.complete && FoxSpriteManager.jumpSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.jumpSheet;
       // 8-frame jump sequence based on ballistics:
       if (squash > 0.35) {
@@ -87,10 +102,10 @@ export class Animal2DRenderer {
       } else {
         frameIdx = 5; // Falling reach
       }
-    } else if (isGrounded && speed > 20 && FoxSpriteManager.runSheet) {
+    } else if (isGrounded && speed > 20 && FoxSpriteManager.runSheet?.complete && FoxSpriteManager.runSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.runSheet;
       frameIdx = Math.floor(runCycle * 8) % 8;
-    } else if (FoxSpriteManager.idleSheet) {
+    } else if (FoxSpriteManager.idleSheet?.complete && FoxSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.idleSheet;
       frameIdx = Math.floor(time * 8) % 8;
     } else {

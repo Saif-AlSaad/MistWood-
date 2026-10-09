@@ -1,6 +1,6 @@
 /* MistWood Service Worker — Offline Caching & PWA Support */
 
-const CACHE_NAME = "mistwood-v1";
+const CACHE_NAME = "mistwood-v2";
 
 const PRECACHE_ASSETS = [
   "./",
@@ -12,6 +12,10 @@ const PRECACHE_ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon-maskable-512.png",
+  "./assets/characters/fox/fox_idle.png",
+  "./assets/characters/fox/fox_run.png",
+  "./assets/characters/fox/fox_jump.png",
+  "./assets/characters/fox/extra/crouch.png",
 ];
 
 // Install: Cache core application shell
