@@ -115,6 +115,7 @@ export interface Stats {
   maxSpeedKmh: number;
   biomeName: string;
   totalFlies: number;
+  timeOfDay?: string;
 }
 
 export interface HUDData {
@@ -129,6 +130,7 @@ export interface HUDData {
   biomeNext: string;
   biomeProgress: number;
   nearMissCount: number;
+  timeOfDay?: string;
 }
 
 export type FontTheme = "mythic" | "elder" | "arcade" | "tactical";

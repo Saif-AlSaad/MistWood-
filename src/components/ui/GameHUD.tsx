@@ -2,6 +2,7 @@ import React from "react";
 import {
   ArrowBigDown,
   ArrowBigUp,
+  Clock,
   Compass,
   Pause,
   Settings,
@@ -103,14 +104,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           paddingTop: "env(safe-area-inset-top, 0px)",
         }}
       >
-        {/* Biome progress meter */}
-        <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 backdrop-blur-md shadow-md">
+        {/* Biome progress meter & In-Game Clock */}
+        <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-md shadow-md">
           <Compass className="h-3.5 w-3.5 text-amber-200/80 shrink-0" />
           <span className="font-display text-[11px] font-bold tracking-[0.2em] text-white/90 uppercase">
             {hud?.biomeName ?? "Golden Dawn"}
           </span>
 
-          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/15 md:w-28">
+          {hud?.timeOfDay && (
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 font-hud text-[10px] font-semibold tracking-wider text-amber-200/95 tabular-nums">
+              <Clock className="h-2.5 w-2.5 text-amber-300/90" />
+              {hud.timeOfDay}
+            </span>
+          )}
+
+          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-white/15 md:w-24">
             <div
               className="h-full bg-gradient-to-r from-amber-400 via-amber-200 to-cyan-300 shadow-[0_0_10px_rgba(251,191,36,0.6)] transition-all duration-300"
               style={{ width: `${Math.round((hud?.biomeProgress ?? 0) * 100)}%` }}

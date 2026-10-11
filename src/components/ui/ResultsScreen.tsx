@@ -137,10 +137,10 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
           </div>
         </div>
 
-        {/* Deepest Biome */}
+        {/* Deepest Biome & Time */}
         <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] p-3 backdrop-blur-md">
           <span className="font-game text-[10px] font-bold tracking-wider uppercase text-white/40">
-            Biome
+            {stats.timeOfDay ? stats.timeOfDay : "Biome"}
           </span>
           <div className="mt-1 flex items-center gap-1 text-white/80">
             <Compass className="h-3.5 w-3.5 text-amber-200/70" />

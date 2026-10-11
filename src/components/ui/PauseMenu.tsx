@@ -38,7 +38,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
 
         {/* Current Run Snapshot */}
         {hud && (
-          <div className="mt-5 grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
+          <div className="mt-5 grid w-full grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left">
             <div>
               <span className="font-game text-[10px] font-bold text-white/40 uppercase tracking-wider">
                 Distance
@@ -53,6 +53,14 @@ export const PauseMenu: React.FC<PauseMenuProps> = ({
               </span>
               <div className="font-hud text-sm font-bold text-cyan-200 tabular-nums">
                 {hud.speedKmh} <span className="font-game text-xs text-cyan-300/70">KM/H</span>
+              </div>
+            </div>
+            <div>
+              <span className="font-game text-[10px] font-bold text-white/40 uppercase tracking-wider">
+                Time
+              </span>
+              <div className="font-hud text-xs font-bold text-amber-200 tabular-nums truncate">
+                {hud.timeOfDay ?? hud.biomeName}
               </div>
             </div>
           </div>

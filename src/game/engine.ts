@@ -24,6 +24,28 @@ interface EngineCallbacks {
 
 const BEST_KEY = "mistwood_best";
 
+/** 2-minute day/night cycle: 120s full 24-hour cycle, 60s 12pm->12am, 60s 12am->12pm */
+export const DAY_NIGHT_CYCLE_SECONDS = 120;
+export const SECONDS_PER_SEGMENT = DAY_NIGHT_CYCLE_SECONDS / 4; // 30 seconds per quadrant
+
+/**
+ * Maps cycle phase to formatted 12-hour clock (e.g. 12:00 PM, 6:00 PM, 12:00 AM, 6:00 AM)
+ * Phase 0.0 = 6:00 AM (Golden Dawn)
+ * Phase 1.0 = 12:00 PM (Quiet Midday)
+ * Phase 2.0 = 6:00 PM (Violet Dusk)
+ * Phase 3.0 = 12:00 AM (Firefly Night)
+ * Phase 4.0 = 6:00 AM (Golden Dawn)
+ */
+export function formatTimeOfDay(phase: number): string {
+  const totalMinutes = ((phase * 360 + 360) % 1440 + 1440) % 1440;
+  const hours24 = Math.floor(totalMinutes / 60);
+  const minutes = Math.floor(totalMinutes % 60);
+  const period = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const mm = minutes < 10 ? `0${minutes}` : `${minutes}`;
+  return `${hours12}:${mm} ${period}`;
+}
+
 export class Engine {
   state: GameState = "loading";
   best = 0;
@@ -70,6 +92,7 @@ export class Engine {
   private shake = 0;
   private deadReal = 0;
   private lastSeg = 0;
+  private runTime = 0;
   private toastId = 0;
   private leafTimer = 2;
   private trailTimer = 0;
@@ -190,6 +213,7 @@ export class Engine {
     this.lastPatternEnd = 600;
     this.nextBloomAt = rand(380, 620) * 16;
     this.lastSeg = 0;
+    this.runTime = 0;
     this.timeScale = 1;
     this.deadReal = 0;
     this.slideHeld = false;
@@ -243,6 +267,8 @@ export class Engine {
     this.cameraBounceY = 0;
     this.cameraTilt = 0;
     this.shake = 0;
+    this.runTime = 0;
+    this.lastSeg = 0;
     this.audio.ensure();
     this.audio.resume();
     this.setState("menu");
@@ -572,11 +598,15 @@ export class Engine {
       }
     }
 
-    // phase & palette
+    if (playing || dying) {
+      this.runTime += dt;
+    }
+
+    // phase & palette (2-minute day/night cycle: 30s per quadrant, 60s 12pm->12am, 60s 12am->12pm)
     const phase =
       this.state === "menu" || this.state === "over"
-        ? this.time * 0.018
-        : this.dist / 600;
+        ? this.time / SECONDS_PER_SEGMENT
+        : this.runTime / SECONDS_PER_SEGMENT;
     this.world.setPhase(phase);
     this.world.updateAmbient(dt, this.w, this.h, this.time);
 
@@ -596,7 +626,7 @@ export class Engine {
         }
         this.timeScale = 1;
         this.setState("over");
-        const segIdx = Math.floor(this.dist / 600) % SEGMENTS.length;
+        const segIdx = Math.floor(phase) % SEGMENTS.length;
         this.cb.onGameOver({
           dist: distM,
           flies: this.fliesN,
@@ -606,6 +636,7 @@ export class Engine {
           maxSpeed: this.maxSpeedReached,
           maxSpeedKmh: speedToKmh(this.maxSpeedReached),
           biomeName: SEGMENTS[segIdx].name,
+          timeOfDay: formatTimeOfDay(phase),
           totalFlies: this.fliesN,
         });
       }
@@ -660,8 +691,8 @@ export class Engine {
       this.dist += (this.speed * dt) / 16;
       this.slideImpulseT -= dt;
 
-      // segment toasts
-      const seg = Math.floor(this.dist / 600);
+      // segment toasts (every 30s as day & night phases advance)
+      const seg = Math.floor(phase);
       if (seg !== this.lastSeg) {
         this.lastSeg = seg;
         const s = SEGMENTS[seg % 4];
@@ -674,7 +705,7 @@ export class Engine {
       this.hudTimer -= dt;
       if (this.hudTimer <= 0) {
         this.hudTimer = 0.05;
-        const segIdx = Math.floor(this.dist / 600) % SEGMENTS.length;
+        const segIdx = Math.floor(phase) % SEGMENTS.length;
         const nextSegIdx = (segIdx + 1) % SEGMENTS.length;
         this.cb.onHUD?.({
           dist: Math.floor(this.dist),
@@ -686,7 +717,8 @@ export class Engine {
           ghostT: Math.max(0, this.player.ghostT),
           biomeName: SEGMENTS[segIdx].name,
           biomeNext: SEGMENTS[nextSegIdx].name,
-          biomeProgress: (this.dist % 600) / 600,
+          biomeProgress: phase % 1,
+          timeOfDay: formatTimeOfDay(phase),
           nearMissCount: this.nearMisses,
         });
       }
