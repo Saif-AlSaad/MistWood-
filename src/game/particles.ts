@@ -219,11 +219,16 @@ export class Particles {
         ctx.stroke();
       } else if (o.type === PT.Streak) {
         const streakAlpha = Math.min(1, (o.life / 0.28) * 1.3);
-        ctx.strokeStyle = rgb(pal.accent, streakAlpha * 0.4);
-        ctx.lineWidth = 2.4;
+        const len = o.size * (o.life / 0.28);
+        const grad = ctx.createLinearGradient(o.x, o.y, o.x + len, o.y);
+        grad.addColorStop(0, rgb(pal.accent, 0));
+        grad.addColorStop(0.5, rgb(pal.accent, streakAlpha * 0.35));
+        grad.addColorStop(1, rgb(pal.accent, 0));
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.moveTo(o.x, o.y);
-        ctx.lineTo(o.x + o.size * (o.life / 0.28), o.y);
+        ctx.lineTo(o.x + len, o.y);
         ctx.stroke();
       } else {
         ctx.fillStyle = rgb(pal.accent, a * 0.16);

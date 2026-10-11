@@ -643,11 +643,15 @@ export class Engine {
       if (this.speed > 520 && this.settings.speedEffects) {
         this.speedStreakTimer -= dt;
         if (this.speedStreakTimer <= 0) {
-          this.speedStreakTimer = rand(0.04, 0.08);
+          this.speedStreakTimer = rand(0.06, 0.12);
+          const inUpperSky = Math.random() > 0.45;
+          const streakY = inUpperSky
+            ? rand(30, this.h * 0.26)
+            : rand(this.h * 0.74, this.h * 0.88);
           this.particles.streak(
             this.w + rand(10, 50),
-            rand(40, this.h * 0.8),
-            rand(60, 140) * (this.speed / 340),
+            streakY,
+            rand(70, 150) * (this.speed / 340),
           );
         }
       }
@@ -1016,52 +1020,58 @@ export class Engine {
     }
   }
 
-  /** Subtle peripheral racing wind streaks & corner tunnel vision when reaching high velocities */
+  /** Smooth peripheral aerodynamic slipstreams and edge tunnel haze (clean center, no cross lines) */
   private renderSpeedEffects(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     const speedRatio = Math.min(1, (this.speed - 520) / 380);
-    const alpha = 0.06 + speedRatio * 0.22;
+    const alpha = 0.05 + speedRatio * 0.16;
     ctx.save();
-    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.4;
 
-    // Horizontal rushing air streams
-    for (let i = 0; i < 9; i++) {
-      const sy = (this.time * 880 + i * 137) % (h * 0.86);
-      const len = 80 + (i * 47) % 130 + speedRatio * 80;
-      const sx = w - ((this.time * 2800 + i * 370) % (w * 0.8));
+    // 1. Smooth horizontal peripheral wind streams (upper sky and lower turf only, keeping center gameplay clear)
+    const streamCount = 7;
+    for (let i = 0; i < streamCount; i++) {
+      const inTop = i < 4;
+      const sy = inTop
+        ? (h * 0.04 + ((this.time * 500 + i * 89) % (h * 0.22)))
+        : (h * 0.78 + ((this.time * 500 + i * 73) % (h * 0.16)));
+
+      const len = 110 + (i * 35) % 90 + speedRatio * 120;
+      const speedOffset = (this.time * 2000 + i * 390) % (w + len + 200);
+      const sx = w + 80 - speedOffset;
+
+      const grad = ctx.createLinearGradient(sx - len, sy, sx, sy);
+      grad.addColorStop(0, "rgba(255, 255, 255, 0)");
+      grad.addColorStop(0.4, `rgba(255, 255, 255, ${(alpha * 0.65).toFixed(3)})`);
+      grad.addColorStop(0.85, `rgba(240, 248, 255, ${(alpha * 0.9).toFixed(3)})`);
+      grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(sx - len, sy);
+      ctx.moveTo(sx - len, sy);
+      ctx.lineTo(sx, sy);
       ctx.stroke();
     }
 
-    // Peripheral corner tunnel lines when breaking high speeds (>620 px/s)
-    if (this.speed > 620) {
-      const tunnelAlpha = Math.min(0.18, (this.speed - 620) / 600);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${tunnelAlpha.toFixed(3)})`;
-      ctx.lineWidth = 1.2;
-      const corners = [
-        [0, 0],
-        [w, 0],
-        [0, h * 0.78],
-        [w, h * 0.78],
-      ];
-      const cx = w * 0.5;
-      const cy = h * 0.5;
-      for (const [corX, corY] of corners) {
-        for (let j = 0; j < 3; j++) {
-          const t = (this.time * 4 + j * 0.33) % 1;
-          const px = lerp(corX, cx, t);
-          const py = lerp(corY, cy, t);
-          const pEnd = lerp(corX, cx, Math.min(1, t + 0.18));
-          const pEndY = lerp(corY, cy, Math.min(1, t + 0.18));
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(pEnd, pEndY);
-          ctx.stroke();
-        }
-      }
+    // 2. Smooth aerodynamic edge tunnel fade (soft radial darkening on extreme sides, zero cross lines)
+    if (this.speed > 580) {
+      const edgeIntensity = Math.min(0.2, (this.speed - 580) / 700);
+      const edgeW = Math.min(150, w * 0.13);
+
+      // Left edge speed haze
+      const leftGrad = ctx.createLinearGradient(0, 0, edgeW, 0);
+      leftGrad.addColorStop(0, `rgba(4, 6, 12, ${edgeIntensity.toFixed(3)})`);
+      leftGrad.addColorStop(1, "rgba(4, 6, 12, 0)");
+      ctx.fillStyle = leftGrad;
+      ctx.fillRect(0, 0, edgeW, h);
+
+      // Right edge speed haze
+      const rightGrad = ctx.createLinearGradient(w, 0, w - edgeW, 0);
+      rightGrad.addColorStop(0, `rgba(4, 6, 12, ${edgeIntensity.toFixed(3)})`);
+      rightGrad.addColorStop(1, "rgba(4, 6, 12, 0)");
+      ctx.fillStyle = rightGrad;
+      ctx.fillRect(w - edgeW, 0, edgeW, h);
     }
+
     ctx.restore();
   }
 
