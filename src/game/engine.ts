@@ -8,6 +8,8 @@ import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, O
 import { DEFAULT_SETTINGS, FOX_PELTS, clamp, lerp, rand, speedToKmh } from "./types";
 import type { AnimalDefinition } from "./animals";
 import { ANIMALS, mapLegacyPeltId } from "./animals";
+import { WildlifeSystem } from "./wildlife";
+import { WeatherSystem } from "./weather";
 import { haptics, setHapticsEnabled } from "../utils/haptics";
 
 interface EngineCallbacks {
@@ -37,6 +39,8 @@ export class Engine {
   private player: Player;
   private particles = new Particles();
   private audio = new AudioEngine();
+  private wildlife = new WildlifeSystem();
+  private weather = new WeatherSystem();
 
   private raf = 0;
   private last = 0;
@@ -166,6 +170,7 @@ export class Engine {
     this.audio.resume();
     this.player.reset();
     this.particles.clear();
+    this.wildlife.reset();
     this.obstacles = [];
     this.flies = [];
     this.bloom = null;
@@ -225,6 +230,7 @@ export class Engine {
   toMenu(): void {
     this.player.reset();
     this.particles.clear();
+    this.wildlife.reset();
     this.obstacles = [];
     this.flies = [];
     this.bloom = null;
@@ -734,6 +740,25 @@ export class Engine {
 
     this.particles.update(dt, -40);
     this.world.updateAmbient(dt, this.w, this.h, this.time);
+    this.wildlife.update(
+      dt,
+      this.scroll,
+      this.foxX,
+      this.groundY,
+      playing ? this.speed : 48,
+      this.time,
+    );
+    this.weather.update(
+      dt,
+      this.w,
+      this.h,
+      this.groundY,
+      playing ? this.speed : 48,
+      this.time,
+      this.world.pal.night,
+      phase,
+      this.reduced || this.settings.reducedMotion,
+    );
     this.audio.maybeChirp(dt, this.world.pal.night);
     this.audio.updateMusic(dt, phase);
     this.shake = Math.max(0, this.shake - dt * 26);
@@ -894,11 +919,21 @@ export class Engine {
     this.world.renderSky(ctx, w, h);
     this.world.renderFar(ctx, w, h, this.time);
 
+    // High-altitude soaring raptors (distant sky)
+    this.wildlife.renderSoaringRaptors(ctx, pal);
+
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
+    // Distant stags (behind the near treeline in the misty far ground)
+    this.wildlife.renderDistantStags(ctx, w, gy, this.scroll, this.time, pal);
+
     this.world.renderTreelines(ctx, w, h, gy, this.scroll, this.time);
     this.world.renderTrunks(ctx, w, h, this.scroll);
+
+    // Perched & startled midground birds among the trunks
+    this.wildlife.renderMidgroundBirds(ctx, w, gy, this.scroll, pal);
+
     this.world.renderRays(ctx, w, h, this.time);
 
     // ---- gameplay plane ----
@@ -949,6 +984,13 @@ export class Engine {
 
     this.particles.renderFlat(ctx, pal);
     this.particles.renderGlow(ctx, pal);
+
+    // Atmospheric dynamic rain streaks & ground impact ripples
+    this.weather.renderRain(ctx, w, h, gy, this.speed, pal);
+
+    // 3D tumbling autumn foliage swirling in the wind
+    this.weather.renderSwirlingLeaves(ctx, pal);
+
     this.world.renderWisps(ctx);
     this.world.renderMotes(ctx, this.time);
     this.world.renderForeground(ctx, w, h, this.scroll);
