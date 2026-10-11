@@ -272,6 +272,8 @@ export class Player {
       scale: k,
       rimColor: rgb(pal.rim, 0.75),
       flipRotation,
+      isDead: this.dead,
+      deadT: this.deadT,
     });
     ctx.restore();
   }

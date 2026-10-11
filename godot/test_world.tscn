@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://b8worldscene2026"]
+[gd_scene load_steps=10 format=3 uid="uid://b8worldscene2026"]
 
 [ext_resource type="Script" path="res://test_world.gd" id="1_world_script"]
 [ext_resource type="PackedScene" uid="uid://c7foxplayer314" path="res://characters/fox/fox.tscn" id="2_fox"]
@@ -9,12 +9,32 @@ size = Vector2(2400, 64)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_platform"]
 size = Vector2(280, 28)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bramble"]
+size = Vector2(56, 36)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_boulder"]
+size = Vector2(64, 44)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.06, 0.08, 0.12, 0.85)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gameover"]
+bg_color = Color(0.12, 0.04, 0.05, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.85, 0.25, 0.25, 0.8)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+shadow_color = Color(0, 0, 0, 0.6)
+shadow_size = 16
 
 [node name="TestWorld" type="Node2D"]
 script = ExtResource("1_world_script")
@@ -82,6 +102,54 @@ offset_right = 140.0
 offset_bottom = 14.0
 color = Color(0.24, 0.38, 0.26, 1)
 
+[node name="DeadlyBramble" type="StaticBody2D" parent="." groups=["deadly_obstacles"]]
+position = Vector2(380, 50)
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DeadlyBramble"]
+shape = SubResource("RectangleShape2D_bramble")
+
+[node name="Visual" type="ColorRect" parent="DeadlyBramble"]
+offset_left = -28.0
+offset_top = -18.0
+offset_right = 28.0
+offset_bottom = 18.0
+color = Color(0.65, 0.15, 0.15, 1)
+
+[node name="Label" type="Label" parent="DeadlyBramble"]
+offset_left = -26.0
+offset_top = -14.0
+offset_right = 26.0
+offset_bottom = 12.0
+theme_override_font_sizes/font_size = 11
+text = "BRIAR"
+horizontal_alignment = 1
+
+[node name="DeadlyBoulder" type="StaticBody2D" parent="." groups=["deadly_obstacles"]]
+position = Vector2(850, 46)
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DeadlyBoulder"]
+shape = SubResource("RectangleShape2D_boulder")
+
+[node name="Visual" type="ColorRect" parent="DeadlyBoulder"]
+offset_left = -32.0
+offset_top = -22.0
+offset_right = 32.0
+offset_bottom = 22.0
+color = Color(0.45, 0.15, 0.2, 1)
+
+[node name="Label" type="Label" parent="DeadlyBoulder"]
+offset_left = -30.0
+offset_top = -14.0
+offset_right = 30.0
+offset_bottom = 12.0
+theme_override_font_sizes/font_size = 11
+text = "ROCK"
+horizontal_alignment = 1
+
 [node name="FoxPlayer" parent="." instance=ExtResource("2_fox")]
 position = Vector2(-80, 68)
 
@@ -91,9 +159,9 @@ position = Vector2(-80, 68)
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -300.0
+offset_left = -380.0
 offset_top = 20.0
-offset_right = 300.0
+offset_right = 380.0
 offset_bottom = 68.0
 grow_horizontal = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -112,9 +180,60 @@ theme_override_constants/separation = 16
 [node name="Label" type="Label" parent="UI/Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Active: Red Fox  |  Press [Tab] or [C] to Switch"
+text = "Active: Forest Stag Deer (High Agility & Death Collapse)  |  [Tab / C / 1-3] Switch  |  [R] Retry"
 horizontal_alignment = 1
 
 [node name="SwitchButton" type="Button" parent="UI/Panel/MarginContainer/HBoxContainer"]
 layout_mode = 2
-text = "Switch to Panda"
+text = "Switch Animal"
+
+[node name="GameOverPanel" type="PanelContainer" parent="UI"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -80.0
+offset_right = 220.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_gameover")
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/GameOverPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/GameOverPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="UI/GameOverPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "CRASH! Forest Deer Collapsed"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="UI/GameOverPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "The ancient forest obstacles broke your stride."
+horizontal_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="UI/GameOverPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="RetryButton" type="Button" parent="UI/GameOverPanel/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "Retry Run [R]"
+
+[node name="ChangeAnimalButton" type="Button" parent="UI/GameOverPanel/MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "Switch Animal"

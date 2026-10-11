@@ -1,6 +1,8 @@
 extends CharacterBody2D
 class_name FoxPlayer
 
+signal died
+
 ## Movement and Physics Constants
 @export_group("Movement")
 @export var speed: float = 300.0
@@ -18,6 +20,7 @@ class_name FoxPlayer
 var coyote_timer: float = 0.0
 var jump_buffer_timer: float = 0.0
 var current_anim_state: StringName = &""
+var is_dead: bool = false
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
@@ -64,10 +67,28 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, friction * delta)
 
 	# 5. Move Character with Godot Physics
+	if is_dead:
+		velocity.x = move_toward(velocity.x, 0.0, friction * 2.0 * delta)
+		move_and_slide()
+		return
+
 	move_and_slide()
 
-	# 6. Update Animations
+	# 6. Check Deadly Collisions
+	for i in range(get_slide_collision_count()):
+		var col = get_slide_collision(i)
+		var collider = col.get_collider()
+		if collider != null and collider.is_in_group("deadly_obstacles"):
+			die()
+			return
+
+	# 7. Update Animations
 	update_animation()
+
+func die() -> void:
+	if is_dead: return
+	is_dead = true
+	died.emit()
 
 func update_animation() -> void:
 	if not is_on_floor():
