@@ -17,7 +17,7 @@ interface MainMenuProps {
   activePelt?: FoxPelt;
   activeAnimal?: AnimalDefinition;
   muted: boolean;
-  isTouch: boolean;
+  isTouch?: boolean;
   onStart: () => void;
   onOpenGarage: () => void;
   onOpenSettings: () => void;
@@ -31,7 +31,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   activePelt,
   activeAnimal,
   muted,
-  isTouch,
   onStart,
   onOpenGarage,
   onOpenSettings,
@@ -150,32 +149,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <span>RUNNER: <span className="text-white font-bold">{animalName.toUpperCase()}</span></span>
           </div>
         </div>
-      </div>
-
-      {/* Bottom Controls Legend */}
-      <div className="flex flex-col items-center gap-1.5">
-        {isTouch ? (
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 font-game text-[10px] font-semibold tracking-widest text-white/50 backdrop-blur-sm uppercase">
-            <span>Tap Right to Leap · Tap Left to Slide</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 font-game text-[10px] font-semibold tracking-widest text-white/50 backdrop-blur-sm uppercase">
-            <span className="flex items-center gap-1">
-              <span className="font-hud rounded bg-white/10 px-1.5 py-0.5 text-white/90">SPACE</span>
-              <span>Jump ×2</span>
-            </span>
-            <span className="text-white/20">·</span>
-            <span className="flex items-center gap-1">
-              <span className="font-hud rounded bg-white/10 px-1.5 py-0.5 text-white/90">S</span>
-              <span>Slide</span>
-            </span>
-            <span className="text-white/20">·</span>
-            <span className="flex items-center gap-1">
-              <span className="font-hud rounded bg-white/10 px-1.5 py-0.5 text-white/90">ESC</span>
-              <span>Pause</span>
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );
