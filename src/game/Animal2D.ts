@@ -62,9 +62,45 @@ class FoxSpriteManager {
   }
 }
 
+class PandaSpriteManager {
+  static idleSheet: HTMLImageElement | null = null;
+  static runSheet: HTMLImageElement | null = null;
+  static jumpSheet: HTMLImageElement | null = null;
+  static sitSheet: HTMLImageElement | null = null;
+  static initialized = false;
+
+  private static loadSheet(path: string): HTMLImageElement {
+    const img = new Image();
+    const resolved = getFoxAssetUrl(path);
+    img.src = resolved;
+    img.onerror = () => {
+      const fallback = path.startsWith("/") ? path : `/${path}`;
+      if (img.src !== fallback && !img.src.endsWith(path)) {
+        img.src = fallback;
+      }
+    };
+    return img;
+  }
+
+  static init(): void {
+    if (this.initialized || typeof window === "undefined") return;
+    this.idleSheet = this.loadSheet("assets/characters/panda/panda_idle.png");
+    this.runSheet = this.loadSheet("assets/characters/panda/panda_run.png");
+    this.jumpSheet = this.loadSheet("assets/characters/panda/panda_jump.png");
+    this.sitSheet = this.loadSheet("assets/characters/panda/extra/sit.png");
+    this.initialized = true;
+  }
+
+  static isReady(): boolean {
+    this.init();
+    return !!(this.idleSheet?.complete && this.idleSheet.naturalWidth > 0);
+  }
+}
+
 // Preload immediately in browser context
 if (typeof window !== "undefined") {
   FoxSpriteManager.init();
+  PandaSpriteManager.init();
 }
 
 export class Animal2DRenderer {
@@ -134,6 +170,71 @@ export class Animal2DRenderer {
     return true;
   }
 
+  static renderPandaSprite(
+    ctx: CanvasRenderingContext2D,
+    anim: AnimalAnimParams,
+    sx: number,
+    sy: number
+  ): boolean {
+    if (!PandaSpriteManager.isReady()) {
+      return false;
+    }
+
+    const { time, runCycle, speed, isGrounded, vy, isSliding, squash } = anim;
+
+    let sheet: HTMLImageElement;
+    let frameIdx = 0;
+
+    if (isSliding && PandaSpriteManager.sitSheet?.complete && PandaSpriteManager.sitSheet.naturalWidth > 0) {
+      sheet = PandaSpriteManager.sitSheet;
+      frameIdx = 0;
+    } else if (!isGrounded && PandaSpriteManager.jumpSheet?.complete && PandaSpriteManager.jumpSheet.naturalWidth > 0) {
+      sheet = PandaSpriteManager.jumpSheet;
+      // 8-frame jump sequence based on ballistics:
+      if (squash > 0.35) {
+        frameIdx = 6; // Landing impact recovery
+      } else if (vy > 400) {
+        frameIdx = 1; // Takeoff leap
+      } else if (vy > 150) {
+        frameIdx = 2; // Rising leap
+      } else if (vy > -150) {
+        frameIdx = 3; // Apex airborne float
+      } else if (vy > -400) {
+        frameIdx = 4; // Descending leap
+      } else {
+        frameIdx = 5; // Landing touch
+      }
+    } else if (isGrounded && speed > 20 && PandaSpriteManager.runSheet?.complete && PandaSpriteManager.runSheet.naturalWidth > 0) {
+      sheet = PandaSpriteManager.runSheet;
+      frameIdx = Math.floor(runCycle * 8) % 8;
+    } else if (PandaSpriteManager.idleSheet?.complete && PandaSpriteManager.idleSheet.naturalWidth > 0) {
+      sheet = PandaSpriteManager.idleSheet;
+      frameIdx = Math.floor(time * 8) % 8;
+    } else {
+      return false;
+    }
+
+    ctx.save();
+    ctx.scale(sx, sy);
+
+    // Uniform 128x128 frame parameters:
+    // Foot baseline is at y = 112, center is at x = 64
+    const spriteScale = 0.78;
+    const drawW = 128 * spriteScale;
+    const drawH = 128 * spriteScale;
+    const drawX = -64 * spriteScale;
+    const drawY = -112 * spriteScale;
+
+    if (sheet === PandaSpriteManager.sitSheet) {
+      ctx.drawImage(sheet, 0, 0, 128, 128, drawX, drawY, drawW, drawH);
+    } else {
+      ctx.drawImage(sheet, frameIdx * 128, 0, 128, 128, drawX, drawY, drawW, drawH);
+    }
+
+    ctx.restore();
+    return true;
+  }
+
   /** Renders a realistic 2D quadruped animal with anatomical accuracy, layered fur markings, and dynamic gait */
   static render(
     ctx: CanvasRenderingContext2D,
@@ -179,6 +280,12 @@ export class Animal2DRenderer {
 
     // 2D Cartoon Fox Sprite Integration:
     if (id === "fox" && Animal2DRenderer.renderFoxSprite(ctx, anim, sx, sy)) {
+      ctx.restore();
+      return;
+    }
+
+    // 2D Cartoon Panda Sprite Integration:
+    if (id === "panda" && Animal2DRenderer.renderPandaSprite(ctx, anim, sx, sy)) {
       ctx.restore();
       return;
     }

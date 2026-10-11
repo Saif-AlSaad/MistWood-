@@ -1,6 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://b8worldscene2026"]
+[gd_scene load_steps=7 format=3 uid="uid://b8worldscene2026"]
 
-[ext_resource type="PackedScene" uid="uid://c7foxplayer314" path="res://characters/fox/fox.tscn" id="1_fox"]
+[ext_resource type="Script" path="res://test_world.gd" id="1_world_script"]
+[ext_resource type="PackedScene" uid="uid://c7foxplayer314" path="res://characters/fox/fox.tscn" id="2_fox"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
 size = Vector2(2400, 64)
@@ -8,9 +9,15 @@ size = Vector2(2400, 64)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_platform"]
 size = Vector2(280, 28)
 
-[sub_resource type="CanvasTexture" id="CanvasTexture_white"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.06, 0.08, 0.12, 0.85)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
 
 [node name="TestWorld" type="Node2D"]
+script = ExtResource("1_world_script")
 
 [node name="Background" type="ColorRect" parent="."]
 offset_left = -1200.0
@@ -75,5 +82,39 @@ offset_right = 140.0
 offset_bottom = 14.0
 color = Color(0.24, 0.38, 0.26, 1)
 
-[node name="FoxPlayer" parent="." instance=ExtResource("1_fox")]
+[node name="FoxPlayer" parent="." instance=ExtResource("2_fox")]
 position = Vector2(-80, 68)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="PanelContainer" parent="UI"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 20.0
+offset_right = 300.0
+offset_bottom = 68.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="UI/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="UI/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="UI/Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Active: Red Fox  |  Press [Tab] or [C] to Switch"
+horizontal_alignment = 1
+
+[node name="SwitchButton" type="Button" parent="UI/Panel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Switch to Panda"
