@@ -134,11 +134,47 @@ class DeerSpriteManager {
   }
 }
 
+class LionSpriteManager {
+  static idleSheet: HTMLImageElement | null = null;
+  static runSheet: HTMLImageElement | null = null;
+  static jumpSheet: HTMLImageElement | null = null;
+  static deathSheet: HTMLImageElement | null = null;
+  static initialized = false;
+
+  private static loadSheet(path: string): HTMLImageElement {
+    const img = new Image();
+    const resolved = getFoxAssetUrl(path);
+    img.src = resolved;
+    img.onerror = () => {
+      const fallback = path.startsWith("/") ? path : `/${path}`;
+      if (img.src !== fallback && !img.src.endsWith(path)) {
+        img.src = fallback;
+      }
+    };
+    return img;
+  }
+
+  static init(): void {
+    if (this.initialized || typeof window === "undefined") return;
+    this.idleSheet = this.loadSheet("assets/characters/lion/lion_idle.png");
+    this.runSheet = this.loadSheet("assets/characters/lion/lion_run.png");
+    this.jumpSheet = this.loadSheet("assets/characters/lion/lion_jump.png");
+    this.deathSheet = this.loadSheet("assets/characters/lion/lion_death.png");
+    this.initialized = true;
+  }
+
+  static isReady(): boolean {
+    this.init();
+    return !!(this.idleSheet?.complete && this.idleSheet.naturalWidth > 0);
+  }
+}
+
 // Preload immediately in browser context
 if (typeof window !== "undefined") {
   FoxSpriteManager.init();
   PandaSpriteManager.init();
   DeerSpriteManager.init();
+  LionSpriteManager.init();
 }
 
 export class Animal2DRenderer {
@@ -338,6 +374,78 @@ export class Animal2DRenderer {
     return true;
   }
 
+  static renderLionSprite(
+    ctx: CanvasRenderingContext2D,
+    anim: AnimalAnimParams,
+    sx: number,
+    sy: number
+  ): boolean {
+    if (!LionSpriteManager.isReady()) {
+      return false;
+    }
+
+    const { time, runCycle, speed, isGrounded, vy, isSliding, squash, isDead, deadT } = anim;
+
+    let sheet: HTMLImageElement;
+    let frameIdx = 0;
+
+    // Check if dying or dead
+    if (isDead && LionSpriteManager.deathSheet?.complete && LionSpriteManager.deathSheet.naturalWidth > 0) {
+      sheet = LionSpriteManager.deathSheet;
+      // 8-frame collapse sequence from t = 0 to 1
+      frameIdx = Math.min(7, Math.floor((deadT ?? 0) * 8));
+    } else if (isSliding && LionSpriteManager.deathSheet?.complete && LionSpriteManager.deathSheet.naturalWidth > 0) {
+      // Low sliding stance uses crouching collapse transition frame
+      sheet = LionSpriteManager.deathSheet;
+      frameIdx = 2;
+    } else if (!isGrounded && LionSpriteManager.jumpSheet?.complete && LionSpriteManager.jumpSheet.naturalWidth > 0) {
+      sheet = LionSpriteManager.jumpSheet;
+      // 8-frame ballistic jumping sequence:
+      // f0: takeoff crouch, f1: spring, f2: rising leap, f3: soaring pounce,
+      // f4: high apex flight, f5: descending reach, f6: landing touch, f7: recovery
+      if (squash > 0.35) {
+        frameIdx = 6; // Landing touch impact
+      } else if (vy > 400) {
+        frameIdx = 1; // Springing ascent
+      } else if (vy > 180) {
+        frameIdx = 2; // Rising leap
+      } else if (vy > -120) {
+        frameIdx = 3; // Soaring pounce
+      } else if (vy > -320) {
+        frameIdx = 4; // High apex flight
+      } else if (vy > -500) {
+        frameIdx = 5; // Descending reach
+      } else {
+        frameIdx = 7; // Landing recovery
+      }
+    } else if (isGrounded && speed > 20 && LionSpriteManager.runSheet?.complete && LionSpriteManager.runSheet.naturalWidth > 0) {
+      sheet = LionSpriteManager.runSheet;
+      // 8-frame smooth rhythmic running cycle synced to stride distance
+      frameIdx = Math.floor(runCycle * 8) % 8;
+    } else if (LionSpriteManager.idleSheet?.complete && LionSpriteManager.idleSheet.naturalWidth > 0) {
+      sheet = LionSpriteManager.idleSheet;
+      // 8-frame idle breathing cycle at ~8 FPS
+      frameIdx = Math.floor(time * 8) % 8;
+    } else {
+      return false;
+    }
+
+    ctx.save();
+    ctx.scale(sx, sy);
+
+    // Uniform 128x128 frame parameters:
+    // Foot baseline is at y = 112, center is at x = 64
+    const spriteScale = 0.82;
+    const drawW = 128 * spriteScale;
+    const drawH = 128 * spriteScale;
+    const drawX = -64 * spriteScale;
+    const drawY = -112 * spriteScale;
+
+    ctx.drawImage(sheet, frameIdx * 128, 0, 128, 128, drawX, drawY, drawW, drawH);
+    ctx.restore();
+    return true;
+  }
+
   /** Renders a realistic 2D quadruped animal with anatomical accuracy, layered fur markings, and dynamic gait */
   static render(
     ctx: CanvasRenderingContext2D,
@@ -395,6 +503,12 @@ export class Animal2DRenderer {
 
     // 2D Cartoon Deer Sprite Integration:
     if (id === "deer" && Animal2DRenderer.renderDeerSprite(ctx, anim, sx, sy)) {
+      ctx.restore();
+      return;
+    }
+
+    // 2D Cartoon Lion Sprite Integration:
+    if (id === "lion" && Animal2DRenderer.renderLionSprite(ctx, anim, sx, sy)) {
       ctx.restore();
       return;
     }
