@@ -94,12 +94,19 @@ func update_animation() -> void:
 	if not is_on_floor():
 		# Airborne state -> Jump animation
 		play_animation(&"jump")
+		if animated_sprite != null:
+			animated_sprite.speed_scale = 1.2
 	else:
 		# Grounded states
 		if abs(velocity.x) > 10.0:
 			play_animation(&"run")
+			if animated_sprite != null:
+				var run_ratio = clamp(abs(velocity.x) / (speed * 0.75), 1.0, 1.4)
+				animated_sprite.speed_scale = run_ratio
 		else:
 			play_animation(&"idle")
+			if animated_sprite != null:
+				animated_sprite.speed_scale = 1.0
 
 func play_animation(anim_name: StringName) -> void:
 	if current_anim_state == anim_name:

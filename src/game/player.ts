@@ -178,10 +178,9 @@ export class Player {
     this.sliding = ((slideHeld && this.grounded) || this.slideTimer > 0) && !this.dead;
 
     // Natural quadruped galloping biomechanics:
-    // As forward speed accelerates into high-speed sprints, quadrupeds extend their stride length (suspension gallop phase).
-    // This maintains a smooth, athletic galloping rhythm and prevents stroboscopic frame-skipping jitter.
-    const strideExpansion = 1 + Math.max(0, (speedPxPerSec - 320) / 440) * 0.72;
-    const effectiveStride = phys.strideLength * strideExpansion;
+    // Enhanced cadence frequency for fluid, responsive leg movement across all animals
+    const strideExpansion = 1 + Math.max(0, (speedPxPerSec - 320) / 440) * 0.32;
+    const effectiveStride = (phys.strideLength * 0.72) * strideExpansion;
     const cycleSpeed = (speedPxPerSec / effectiveStride) * (this.sliding ? 0.6 : 1.0);
     this.runT += dt * cycleSpeed;
 

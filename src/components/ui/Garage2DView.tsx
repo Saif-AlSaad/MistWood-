@@ -97,7 +97,7 @@ export const Garage2DView: React.FC<Garage2DViewProps> = ({ animal, className = 
 
       // Stride cycle update if running preview
       if (previewRunning) {
-        state.runCycle += dt * 2.8;
+        state.runCycle += dt * 3.6;
       }
 
       const w = container.clientWidth || 640;

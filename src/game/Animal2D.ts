@@ -217,7 +217,7 @@ export class Animal2DRenderer {
       frameIdx = Math.floor(runCycle * 8) % 8;
     } else if (FoxSpriteManager.idleSheet?.complete && FoxSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.idleSheet;
-      frameIdx = Math.floor(time * 8) % 8;
+      frameIdx = Math.floor(time * 10) % 8;
     } else {
       return false;
     }
@@ -283,7 +283,7 @@ export class Animal2DRenderer {
       frameIdx = Math.floor(runCycle * 8) % 8;
     } else if (PandaSpriteManager.idleSheet?.complete && PandaSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = PandaSpriteManager.idleSheet;
-      frameIdx = Math.floor(time * 8) % 8;
+      frameIdx = Math.floor(time * 10) % 8;
     } else {
       return false;
     }
@@ -353,7 +353,7 @@ export class Animal2DRenderer {
       frameIdx = Math.floor(runCycle * 8) % 8;
     } else if (DeerSpriteManager.idleSheet?.complete && DeerSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = DeerSpriteManager.idleSheet;
-      frameIdx = Math.floor(time * 8) % 8;
+      frameIdx = Math.floor(time * 10) % 8;
     } else {
       return false;
     }
@@ -424,8 +424,8 @@ export class Animal2DRenderer {
       frameIdx = Math.floor(runCycle * 8) % 8;
     } else if (LionSpriteManager.idleSheet?.complete && LionSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = LionSpriteManager.idleSheet;
-      // 8-frame idle breathing cycle at ~8 FPS
-      frameIdx = Math.floor(time * 8) % 8;
+      // 8-frame idle breathing cycle at ~10 FPS
+      frameIdx = Math.floor(time * 10) % 8;
     } else {
       return false;
     }
