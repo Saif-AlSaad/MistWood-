@@ -1270,41 +1270,408 @@ export class WorldRenderer {
     const totalW = w + overscan * 2;
     const bottomY = h + overscan + 400;
 
-    // 1. Stratified organic earth gradient: top loam -> deep subsoil -> bedrock
+    // 1. Organic soil stratigraphy: top humus & peat layer -> dark rich loam -> mineral subsoil -> bedrock
+    this.renderSoilStratigraphy(ctx, x0, totalW, gy, bottomY, scroll, p);
+
+    // 2. Soft directional canopy light pools (dappled sunlight / moonlight filtering onto trail)
+    this.renderCanopyDappledLight(ctx, w, gy, scroll, time, p);
+
+    // 3. Ancient gnarled exposed tree roots (wood grain, longitudinal bark striations, ambient occlusion)
+    this.renderExposedRoots(ctx, w, gy, scroll, p);
+
+    // 4. Damp velvety moss cushions (muted olive, deep forest green) clustering on soil & roots
+    this.renderDampMossCushions(ctx, w, gy, scroll, p);
+
+    // 5. Scattered fallen autumn leaves & pine needle mulch in soil hollows
+    this.renderFallenLeavesAndMulch(ctx, w, gy, scroll, p);
+
+    // 6. Embedded river stones & small mineral pebbles with dark damp crevice shadows
+    this.renderEmbeddedStones(ctx, w, gy, scroll, p);
+
+    // 7. Damp moisture hollows and glassy water puddles reflecting the forest canopy
+    this.renderPuddles(ctx, w, gy, scroll, time);
+
+    // 8. Surface directional rim light & crisp turf contact baseline (for strong player/obstacle contrast)
+    this.renderSurfaceContactLine(ctx, x0, totalW, w, gy, p);
+  }
+
+  /** Stratified organic earth profile with top humus mulch layer */
+  private renderSoilStratigraphy(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    totalW: number,
+    gy: number,
+    bottomY: number,
+    scroll: number,
+    p: Palette,
+  ): void {
     const soilGrad = ctx.createLinearGradient(0, gy, 0, bottomY);
-    soilGrad.addColorStop(0, rgb(p.ground));
-    soilGrad.addColorStop(0.18, rgb(mix(p.ground, [24, 18, 14], 0.45)));
-    soilGrad.addColorStop(0.65, rgb(mix(p.ground, [8, 10, 14], 0.75)));
-    soilGrad.addColorStop(1, rgb([4, 6, 10]));
+    const topLoam = mix(p.ground, [40, 26, 18], 0.38);
+    const midLoam = mix(p.ground, [24, 16, 12], 0.55);
+    const deepSubsoil = mix(p.ground, [12, 9, 8], 0.82);
+
+    soilGrad.addColorStop(0, rgb(topLoam));
+    soilGrad.addColorStop(0.03, rgb(topLoam));
+    soilGrad.addColorStop(0.12, rgb(midLoam));
+    soilGrad.addColorStop(0.42, rgb(deepSubsoil));
+    soilGrad.addColorStop(1, rgb([3, 4, 6]));
+
     ctx.fillStyle = soilGrad;
     ctx.fillRect(x0, gy, totalW, bottomY - gy);
 
-    // 2. Reflective glassy water puddle patches along the forest trail
-    this.renderPuddles(ctx, w, gy, scroll, time);
+    // Sub-surface damp mulch strata & organic fiber flecks (top 16px below gy)
+    const mulchStep = 48;
+    const m0 = Math.floor((scroll + x0) / mulchStep) - 1;
+    const mn = Math.ceil(totalW / mulchStep) + 3;
 
-    // 3. Dynamic surface rim glow (peaks under sun/moon horizontal position)
+    ctx.fillStyle = "rgba(10, 6, 4, 0.45)";
+    for (let k = 0; k < mn; k++) {
+      const idx = m0 + k;
+      const mx = idx * mulchStep - scroll + hash(idx, 711) * 22;
+      const my = gy + 2.5 + hash(idx, 712) * 9;
+      const mw = 7 + hash(idx, 713) * 14;
+      const mh = 1.6 + hash(idx, 714) * 2.0;
+      ctx.beginPath();
+      ctx.ellipse(mx, my, mw * 0.5, mh * 0.5, (hash(idx, 715) - 0.5) * 0.35, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  /** Soft directional light pools filtering through canopy tree branches onto the path */
+  private renderCanopyDappledLight(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    time: number,
+    p: Palette,
+  ): void {
+    const isNight = p.night > 0.4;
+    const lightColor: RGB = isNight
+      ? mix([175, 215, 245], p.ray, 0.35)
+      : mix(p.ray, [255, 240, 205], 0.3);
+    const baseAlpha = isNight ? 0.065 * p.night : 0.13 * (1 - p.night * 0.75);
+    if (baseAlpha < 0.01) return;
+
+    const poolStep = 240;
+    const overscan = Math.max(w * 0.5, 600);
+    const p0 = Math.floor((scroll - overscan) / poolStep) - 1;
+    const pn = Math.ceil((w + overscan * 2) / poolStep) + 3;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    for (let k = 0; k < pn; k++) {
+      const idx = p0 + k;
+      const hval = hash(idx, 811);
+      if (hval < 0.25) continue;
+
+      const px = idx * poolStep - scroll + hash(idx, 812) * 95;
+      const pw = 48 + hash(idx, 813) * 65;
+      const ph = 7.5 + hash(idx, 814) * 7.5;
+      const py = gy + 3.0 + hash(idx, 815) * 6;
+      const sway = Math.sin(time * 0.65 + idx * 1.4) * 5.5;
+      const pulse = 0.82 + Math.sin(time * 1.1 + idx * 2.2) * 0.18;
+
+      const grad = ctx.createRadialGradient(px + sway, py, 1.5, px + sway, py, pw * 0.55);
+      grad.addColorStop(0, rgb(lightColor, baseAlpha * pulse));
+      grad.addColorStop(0.5, rgb(lightColor, baseAlpha * 0.42 * pulse));
+      grad.addColorStop(1, rgb(lightColor, 0));
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(px + sway, py, pw * 0.5, ph * 0.5, 0.08, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Ancient gnarled tree roots undulating along the soil trail with weathered wood grain */
+  private renderExposedRoots(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const rootStep = 320;
+    const overscan = Math.max(w * 0.5, 600);
+    const r0 = Math.floor((scroll - overscan) / rootStep) - 1;
+    const rn = Math.ceil((w + overscan * 2) / rootStep) + 3;
+
+    for (let k = 0; k < rn; k++) {
+      const idx = r0 + k;
+      const hval = hash(idx, 831);
+      if (hval < 0.32) continue;
+
+      const rx = idx * rootStep - scroll + hash(idx, 832) * 110;
+      const rLen = 68 + hash(idx, 833) * 82;
+      const rThick = 5.2 + hash(idx, 834) * 4.2;
+      const archH = 2.8 + hash(idx, 835) * 3.4;
+
+      if (rx + rLen < -overscan || rx - rLen > w + overscan) continue;
+
+      // 1. Deep ambient occlusion crevice shadow beneath the root
+      ctx.fillStyle = "rgba(2, 3, 5, 0.68)";
+      ctx.beginPath();
+      ctx.ellipse(rx + rLen * 0.5, gy + rThick * 0.72, rLen * 0.5, rThick * 0.46, 0, 0, TAU);
+      ctx.fill();
+
+      // 2. Gnarled ancient weathered root body (rich dark umber / chestnut wood)
+      const rootWood = mix(p.ground, [46, 32, 22], 0.42);
+      ctx.fillStyle = rgb(rootWood);
+      ctx.beginPath();
+      ctx.moveTo(rx, gy + 2.5);
+      ctx.quadraticCurveTo(rx + rLen * 0.35, gy - archH, rx + rLen * 0.55, gy - archH * 0.7);
+      ctx.quadraticCurveTo(rx + rLen * 0.75, gy - archH * 0.4, rx + rLen, gy + 3.5);
+      ctx.quadraticCurveTo(rx + rLen * 0.6, gy + rThick * 0.85, rx + rLen * 0.4, gy + rThick);
+      ctx.quadraticCurveTo(rx + rLen * 0.15, gy + rThick * 0.75, rx, gy + 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // 3. Directional upper ridge woodgrain highlight
+      const woodHighlight = mix(rootWood, p.rim, 0.25);
+      ctx.strokeStyle = rgb(woodHighlight, 0.65);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(rx + 5, gy + 1);
+      ctx.quadraticCurveTo(rx + rLen * 0.35, gy - archH + 0.8, rx + rLen * 0.55, gy - archH * 0.7 + 0.8);
+      ctx.quadraticCurveTo(rx + rLen * 0.75, gy - archH * 0.4 + 0.8, rx + rLen - 6, gy + 2);
+      ctx.stroke();
+
+      // 4. Longitudinal bark striations and weathered grain marks
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.48)";
+      ctx.lineWidth = 1.0;
+      for (let s = 1; s <= 4; s++) {
+        const sx = rx + (rLen * s) / 5;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2, gy - archH * 0.35);
+        ctx.lineTo(sx + 1.5, gy + rThick * 0.52);
+        ctx.stroke();
+      }
+
+      // 5. Damp velvety moss clinging to the sheltered crevice of the root
+      const mossOlive: RGB = mix(p.ground, [48, 68, 26], 0.5);
+      ctx.fillStyle = rgb(mossOlive, 0.85);
+      ctx.beginPath();
+      ctx.ellipse(rx + rLen * 0.28, gy - archH * 0.4, 7.5, 2.5, -0.2, 0, TAU);
+      ctx.ellipse(rx + rLen * 0.65, gy - archH * 0.25, 9, 2.8, 0.15, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  /** Damp velvety moss cushions in natural muted olive & deep forest green */
+  private renderDampMossCushions(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const mossStep = 175;
+    const overscan = Math.max(w * 0.5, 600);
+    const m0 = Math.floor((scroll - overscan) / mossStep) - 1;
+    const mn = Math.ceil((w + overscan * 2) / mossStep) + 3;
+
+    const deepMoss = mix(p.ground, [30, 48, 18], 0.62);
+    const oliveCushion = mix(p.ground, [56, 78, 30], 0.52);
+    const mossHighlight = mix(p.accent, [98, 138, 48], 0.35);
+
+    for (let k = 0; k < mn; k++) {
+      const idx = m0 + k;
+      const hval = hash(idx, 851);
+      if (hval < 0.22) continue;
+
+      const mx = idx * mossStep - scroll + hash(idx, 852) * 65;
+      const mw = 36 + hash(idx, 853) * 52;
+      const mh = 4.2 + hash(idx, 854) * 5.2;
+
+      if (mx + mw < -overscan || mx - mw > w + overscan) continue;
+
+      // Deep damp base
+      ctx.fillStyle = rgb(deepMoss, 0.94);
+      ctx.beginPath();
+      ctx.ellipse(mx, gy + mh * 0.22, mw * 0.5, mh, 0, Math.PI, 0);
+      ctx.fill();
+
+      // Velvety muted olive cushion mound
+      ctx.fillStyle = rgb(oliveCushion, 0.88);
+      ctx.beginPath();
+      ctx.ellipse(mx - mw * 0.06, gy - mh * 0.32, mw * 0.38, mh * 0.52, 0, Math.PI, 0);
+      ctx.fill();
+
+      // Delicate damp stippled texture dots
+      ctx.fillStyle = rgb(mossHighlight, 0.45);
+      for (let d = 0; d < 4; d++) {
+        const dotX = mx + (hash(idx * 7 + d, 855) - 0.5) * (mw * 0.68);
+        const dotY = gy - mh * 0.42 + hash(idx * 7 + d, 856) * (mh * 0.38);
+        ctx.fillRect(dotX, dotY, 1.2, 1.2);
+      }
+    }
+  }
+
+  /** Scattered fallen woodland leaves & pine needle mulch */
+  private renderFallenLeavesAndMulch(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const leafStep = 115;
+    const overscan = Math.max(w * 0.5, 600);
+    const l0 = Math.floor((scroll - overscan) / leafStep) - 1;
+    const ln = Math.ceil((w + overscan * 2) / leafStep) + 3;
+
+    const leafTones: RGB[] = [
+      mix(p.ground, [92, 54, 32], 0.45), // warm russet
+      mix(p.ground, [70, 42, 22], 0.52), // damp oak
+      mix(p.ground, [62, 40, 20], 0.55), // chestnut
+      mix(p.ground, [68, 62, 34], 0.48), // aged olive-brown
+    ];
+
+    for (let k = 0; k < ln; k++) {
+      const idx = l0 + k;
+      const hval = hash(idx, 871);
+      if (hval < 0.28) continue;
+
+      const lx = idx * leafStep - scroll + hash(idx, 872) * 45;
+      const ly = gy + 0.8 + hash(idx, 873) * 3.5;
+      const angle = (hash(idx, 874) - 0.5) * 1.2;
+      const leafScale = 0.8 + hash(idx, 875) * 0.45;
+      const leafColor = leafTones[Math.floor(hash(idx, 876) * leafTones.length)];
+
+      if (lx < -overscan || lx > w + overscan) continue;
+
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.rotate(angle);
+
+      // Soft ambient contact shadow under fallen leaf
+      ctx.fillStyle = "rgba(2, 2, 4, 0.45)";
+      ctx.beginPath();
+      ctx.ellipse(0.5, 0.8, 6.5 * leafScale, 2.8 * leafScale, 0, 0, TAU);
+      ctx.fill();
+
+      // Leaf blade silhouette (ovate with tapered tip)
+      ctx.fillStyle = rgb(leafColor, 0.9);
+      ctx.beginPath();
+      ctx.moveTo(-6 * leafScale, 0);
+      ctx.quadraticCurveTo(-2 * leafScale, -3.2 * leafScale, 4 * leafScale, -1.8 * leafScale);
+      ctx.lineTo(6.5 * leafScale, 0);
+      ctx.quadraticCurveTo(3 * leafScale, 2.8 * leafScale, -3 * leafScale, 2.5 * leafScale);
+      ctx.closePath();
+      ctx.fill();
+
+      // Subtle leaf midrib vein line
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-5.5 * leafScale, 0);
+      ctx.lineTo(5.5 * leafScale, 0);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // Scattered paired pine needles in hollows
+      if (hash(idx, 877) > 0.65) {
+        ctx.strokeStyle = rgb(mix(p.ground, [80, 50, 24], 0.35), 0.7);
+        ctx.lineWidth = 0.9;
+        const nx = lx + 8;
+        const ny = ly + 1.2;
+        ctx.beginPath();
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(nx + 7, ny - 1.8);
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(nx + 6.5, ny + 1.4);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** Small river pebbles & slate mineral stones embedded in the dark soil */
+  private renderEmbeddedStones(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const stoneStep = 155;
+    const overscan = Math.max(w * 0.5, 600);
+    const s0 = Math.floor((scroll - overscan) / stoneStep) - 1;
+    const sn = Math.ceil((w + overscan * 2) / stoneStep) + 3;
+
+    const stoneTones: RGB[] = [
+      mix(p.ground, [64, 62, 60], 0.38), // damp river slate
+      mix(p.ground, [48, 46, 44], 0.45), // dark granite
+      mix(p.ground, [38, 36, 36], 0.55), // basalt pebble
+    ];
+
+    for (let k = 0; k < sn; k++) {
+      const idx = s0 + k;
+      const hval = hash(idx, 881);
+      if (hval < 0.35) continue;
+
+      const sx = idx * stoneStep - scroll + hash(idx, 882) * 55;
+      const sw = 7.5 + hash(idx, 883) * 12;
+      const sh = sw * 0.46;
+      const sy = gy + 0.8 + hash(idx, 884) * 2.2;
+      const stoneColor = stoneTones[Math.floor(hash(idx, 885) * stoneTones.length)];
+
+      if (sx + sw < -overscan || sx - sw > w + overscan) continue;
+
+      // Dark soil crevice ambient occlusion shadow
+      ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 1.0, sw * 0.56, sh * 0.6, 0, 0, TAU);
+      ctx.fill();
+
+      // Rounded pebble body
+      ctx.fillStyle = rgb(stoneColor, 0.95);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, sw * 0.48, sh, 0, Math.PI, 0);
+      ctx.fill();
+
+      // Damp specular glint along top crest
+      ctx.fillStyle = rgb(mix(stoneColor, p.rim, 0.28), 0.42);
+      ctx.fillRect(sx - sw * 0.25, sy - sh * 0.9, sw * 0.5, 1.2);
+    }
+  }
+
+  /** Surface directional rim light & crisp turf contact baseline */
+  private renderSurfaceContactLine(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    totalW: number,
+    w: number,
+    gy: number,
+    p: Palette,
+  ): void {
     const sunXpx = p.sunX * w;
-    const sheen = ctx.createLinearGradient(0, gy - 1, 0, gy + 32);
-    sheen.addColorStop(0, rgb(p.rim, 0.32));
-    sheen.addColorStop(0.35, rgb(p.rim, 0.09));
+
+    // Atmospheric sheen along ground surface
+    const sheen = ctx.createLinearGradient(0, gy - 1, 0, gy + 28);
+    sheen.addColorStop(0, rgb(p.rim, 0.26));
+    sheen.addColorStop(0.35, rgb(p.rim, 0.07));
     sheen.addColorStop(1, rgb(p.rim, 0));
     ctx.fillStyle = sheen;
-    ctx.fillRect(x0, gy - 1, totalW, 33);
+    ctx.fillRect(x0, gy - 1, totalW, 29);
 
-    // Celestial directional rim light highlight directly beneath sun/moon
+    // Directional celestial rim highlight directly beneath celestial body
     const celRim = ctx.createRadialGradient(sunXpx, gy, 2, sunXpx, gy, w * 0.55);
-    celRim.addColorStop(0, rgb(p.rim, 0.35));
-    celRim.addColorStop(0.5, rgb(p.rim, 0.1));
+    celRim.addColorStop(0, rgb(p.rim, 0.28));
+    celRim.addColorStop(0.5, rgb(p.rim, 0.08));
     celRim.addColorStop(1, rgb(p.rim, 0));
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.fillStyle = celRim;
-    ctx.fillRect(x0, gy - 1, totalW, 24);
+    ctx.fillRect(x0, gy - 1, totalW, 20);
     ctx.restore();
 
-    // Sharp top turf contact line (rock solid, continuous across entire viewport)
-    ctx.fillStyle = rgb(p.rim, 0.45);
-    ctx.fillRect(x0, gy - 0.5, totalW, 1.4);
+    // Sharp top turf contact line (rock solid, continuous across entire viewport, high contrast for player/obstacles)
+    ctx.fillStyle = rgb(p.rim, 0.38);
+    ctx.fillRect(x0, gy - 0.5, totalW, 1.3);
   }
 
   /** Glassy water puddles reflecting the sky and silhouetted forest canopy */
@@ -1382,8 +1749,8 @@ export class WorldRenderer {
     speed = 360,
     playerVy = 0
   ): void {
-    const blade = mix(this.pal.ground, [255, 255, 255], 0.09);
-    const tuft = mix(this.pal.ground, [255, 255, 255], 0.15);
+    const blade = mix(this.pal.ground, [38, 62, 24], 0.52);
+    const tuft = mix(this.pal.ground, [56, 82, 30], 0.46);
 
     const isNearGround = playerGrounded || playerPy < 26;
     const forwardSpeedScale = clamp(speed / 360, 0.65, 2.0);
@@ -1483,7 +1850,7 @@ export class WorldRenderer {
     ctx.fill();
 
     // Dewdrop specular sparkles on tall grass blades (glint and shimmer dynamically with grass displacement)
-    ctx.fillStyle = rgb(this.pal.rim, 0.65);
+    ctx.fillStyle = rgb(this.pal.rim, 0.42);
     for (let k = 0; k < tn; k++) {
       const i = t0 + k;
       if (hash(i, 94) < 0.3) continue;
@@ -1563,6 +1930,33 @@ export class WorldRenderer {
           ctx.fill();
           ctx.restore();
         }
+      }
+    }
+
+    // Delicate woodland sorrel & clover seedlings nestled along the trail
+    const cStep = 180;
+    const c0 = Math.floor((scroll - overscan) / cStep) - 1;
+    const cn = Math.ceil((w + overscan * 2) / cStep) + 3;
+    const seedlingColor = mix(this.pal.ground, [68, 102, 38], 0.55);
+
+    for (let k = 0; k < cn; k++) {
+      const i = c0 + k;
+      if (hash(i, 941) < 0.36) continue;
+      const cx = i * cStep - scroll + hash(i, 942) * 60;
+      const sh = 5.5 + hash(i, 943) * 5.5;
+      ctx.strokeStyle = rgb(mix(this.pal.ground, [32, 52, 22], 0.5), 0.85);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(cx, gy + 1);
+      ctx.lineTo(cx, gy - sh);
+      ctx.stroke();
+
+      // Pair of delicate obovate leaflets
+      ctx.fillStyle = rgb(seedlingColor, 0.85);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(cx + side * 3.2, gy - sh - 0.8, 3.0, 1.9, side * 0.38, 0, TAU);
+        ctx.fill();
       }
     }
   }
