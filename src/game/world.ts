@@ -83,7 +83,7 @@ export function makeObstacle(kind: ObstacleKind, x: number): Obstacle {
     case "log":
       return { kind, x, w: rand(72, 96), h: rand(23, 30), seed };
     case "bramble":
-      return { kind, x, w: rand(62, 86), h: rand(30, 42), seed };
+      return { kind, x, w: rand(74, 96), h: rand(34, 46), seed };
     case "stump":
       return { kind, x, w: rand(30, 38), h: rand(36, 46), seed };
     case "vine":

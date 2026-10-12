@@ -34,7 +34,7 @@ export class ObstacleRenderer {
         this.renderAncientStump(ctx, ob, x, gy, pal);
         break;
       case "bramble":
-        this.renderBriarBramble(ctx, ob, x, gy, pal);
+        this.renderLushGrassCluster(ctx, ob, x, gy, pal);
         break;
       case "vine":
         this.renderHangingLiana(ctx, ob, x, gy, time, pal);
@@ -531,10 +531,12 @@ export class ObstacleRenderer {
   }
 
   /* ------------------------------------------------------------------ */
-  /* 4. Photorealistic Briar Bramble (Interlocking Canes, Thorns, Fruit) */
+  /* 4. Photorealistic Botanical Grass, Fern & Seedling Cluster         */
+  /*    (Lush Hypnum moss cushion, wild blade grasses, broadleaf        */
+  /*     seedlings, multi-tiered pinnate woodland ferns)                */
   /* ------------------------------------------------------------------ */
 
-  private static renderBriarBramble(
+  private static renderLushGrassCluster(
     ctx: CanvasRenderingContext2D,
     ob: Obstacle,
     x: number,
@@ -545,97 +547,262 @@ export class ObstacleRenderer {
     const h = ob.h;
     const seed = ob.seed;
 
-    // 1. Deep Shadow Background Canes (dense tangled thicket silhouette)
-    ctx.strokeStyle = rgb(mix(pal.ground, [0, 0, 0], 0.65));
-    ctx.lineWidth = 3.8;
-    ctx.lineCap = "round";
-    for (let c = 0; c < 4; c++) {
-      const cx0 = x - hw + c * (ob.w / 3);
-      const cx1 = x + (hash(seed + c * 3, 430) - 0.5) * ob.w * 0.8;
-      const cy = gy - h * (0.85 + hash(seed + c * 5, 431) * 0.35);
+    // Palette-informed botanic color tokens
+    const deepMoss: RGB = mix(pal.ground, [28, 54, 18], 0.65);
+    const vibrantMoss: RGB = mix(pal.accent, [64, 148, 38], 0.52);
+    const highlightMoss: RGB = mix(pal.accent, [142, 222, 68], 0.45);
+
+    const fernBaseColor: RGB = mix(pal.ground, [20, 68, 28], 0.6);
+    const fernMidColor: RGB = mix(pal.accent, [46, 158, 52], 0.45);
+    const fernTipColor: RGB = mix(pal.accent, [136, 236, 76], 0.35);
+
+    const grassBaseColor: RGB = mix(pal.ground, [30, 84, 26], 0.55);
+    const grassTipColor: RGB = mix(pal.accent, [122, 218, 58], 0.42);
+
+    const seedlingStem: RGB = mix(pal.accent, [158, 230, 110], 0.35);
+    const seedlingLeaf: RGB = mix(pal.accent, [72, 186, 58], 0.48);
+    const seedlingHighlight: RGB = mix(pal.rim, [200, 255, 140], 0.4);
+
+    // ----------------------------------------------------------------
+    // 1. Base Layer: Lush Undulating Moss Cushion Bed (Hypnum / Sphagnum)
+    // ----------------------------------------------------------------
+    const mossH = 8 + hash(seed, 501) * 4;
+    ctx.fillStyle = rgb(deepMoss, 0.95);
+    ctx.beginPath();
+    ctx.moveTo(x - hw * 1.02, gy + 1);
+    ctx.quadraticCurveTo(x - hw * 0.5, gy - mossH * 1.1, x, gy - mossH * 1.2);
+    ctx.quadraticCurveTo(x + hw * 0.5, gy - mossH * 1.1, x + hw * 1.02, gy + 1);
+    ctx.closePath();
+    ctx.fill();
+
+    // Vibrant moss hummocks
+    ctx.fillStyle = rgb(vibrantMoss, 0.88);
+    const hummockCount = 7;
+    for (let m = 0; m < hummockCount; m++) {
+      const fr = m / (hummockCount - 1);
+      const mx = x - hw * 0.92 + fr * hw * 1.84;
+      const my = gy - mossH * 0.45 - Math.sin(fr * Math.PI) * mossH * 0.5;
+      const mw = hw * 0.35 * (0.8 + hash(seed + m * 5, 502) * 0.4);
+      const mh = mossH * 0.55 * (0.8 + hash(seed + m * 7, 503) * 0.4);
       ctx.beginPath();
-      ctx.moveTo(cx0, gy);
-      ctx.quadraticCurveTo((cx0 + cx1) / 2, cy - 8, cx1, gy);
-      ctx.stroke();
-    }
-
-    // 2. Midground Intertwined Briar Canes
-    const caneColor = mix(pal.ground, [78, 38, 28], 0.35);
-    ctx.strokeStyle = rgb(caneColor);
-    ctx.lineWidth = 3.0;
-
-    const canes = [
-      { x0: x - hw * 0.9, x1: x + hw * 0.4, archY: gy - h * 1.08 },
-      { x0: x - hw * 0.3, x1: x + hw * 0.95, archY: gy - h * 0.98 },
-      { x0: x - hw * 0.6, x1: x + hw * 0.7, archY: gy - h * 1.15 },
-    ];
-
-    for (const cane of canes) {
-      ctx.beginPath();
-      ctx.moveTo(cane.x0, gy);
-      ctx.quadraticCurveTo(
-        (cane.x0 + cane.x1) / 2,
-        cane.archY,
-        cane.x1,
-        gy - 2,
-      );
-      ctx.stroke();
-    }
-
-    // 3. Wicked Recurved Cat's-Claw Thorns along canes
-    ctx.fillStyle = rgb(mix(pal.ground, pal.rim, 0.4));
-    for (let t = 0; t < 9; t++) {
-      const fr = (t + 1) / 10;
-      const tx = x - hw * 0.8 + fr * ob.w * 0.85;
-      const ty = gy - Math.sin(fr * Math.PI) * h * 0.95 + (hash(seed + t, 432) - 0.5) * 6;
-      const thornDir = hash(seed + t, 433) > 0.5 ? 1 : -1;
-      const thornLen = 5.5 + hash(seed + t, 434) * 3;
-
-      ctx.beginPath();
-      ctx.moveTo(tx - 2, ty);
-      ctx.quadraticCurveTo(tx, ty - 2, tx + thornDir * thornLen, ty - thornLen * 0.8);
-      ctx.quadraticCurveTo(tx + 1, ty + 1, tx + 2, ty + 2);
-      ctx.closePath();
+      ctx.ellipse(mx, my, mw * 0.5, mh, 0, 0, TAU);
       ctx.fill();
-
-      // Sharp specular tip glint
-      ctx.fillStyle = rgb(pal.rim, 0.7);
-      ctx.beginPath();
-      ctx.arc(tx + thornDir * thornLen, ty - thornLen * 0.8, 0.9, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = rgb(mix(pal.ground, pal.rim, 0.4));
     }
 
-    // 4. Wild Briar Foliage Clusters (serrated 3-leaflet sprays)
-    ctx.fillStyle = "rgba(22, 101, 52, 0.88)";
-    for (let l = 0; l < 5; l++) {
-      const lx = x - hw * 0.7 + l * (ob.w * 0.35);
-      const ly = gy - h * (0.4 + hash(seed + l * 7, 435) * 0.45);
+    // Microscopic stippled moss frill highlights along upper moss boundary
+    ctx.fillStyle = rgb(highlightMoss, 0.6);
+    for (let s = 0; s < 18; s++) {
+      const fr = s / 17;
+      const sx = x - hw * 0.88 + fr * hw * 1.76 + (hash(seed + s * 11, 504) - 0.5) * 6;
+      const sy = gy - mossH * 0.6 - Math.sin(fr * Math.PI) * mossH * 0.45;
+      ctx.fillRect(sx, sy, 1.4, 2.2);
+    }
+
+    // ----------------------------------------------------------------
+    // 2. Background Multi-Tiered Woodland Fern Fronds (Tall Center & Spreading Apex)
+    // ----------------------------------------------------------------
+    // 5 to 7 majestic arching fronds radiating upwards and outwards
+    const frondCount = 6;
+    for (let f = 0; f < frondCount; f++) {
+      const frondRatio = f / (frondCount - 1); // 0 to 1
+      // Middle fronds stand tallest and most upright, lateral ones bow out
+      const centerFactor = 1 - Math.abs(frondRatio - 0.5) * 1.4; // peak at center
+      const frondH = h * (0.75 + centerFactor * 0.32 + hash(seed + f * 13, 505) * 0.12);
+      const frondSpread = (frondRatio - 0.5) * hw * 1.15;
+      const curveDir = frondRatio < 0.5 ? -1 : 1;
+      const bow = curveDir * hw * 0.22 * (1 - centerFactor * 0.5);
+
+      const stemBaseX = x + (frondRatio - 0.5) * hw * 0.45;
+      const stemBaseY = gy - mossH * 0.6;
+      const tipX = x + frondSpread + bow * 0.5;
+      const tipY = gy - frondH;
+      const ctrlX = stemBaseX + bow * 0.8;
+      const ctrlY = stemBaseY - frondH * 0.55;
+
+      // Central rachis (stem)
+      ctx.strokeStyle = rgb(fernBaseColor, 0.9);
+      ctx.lineWidth = 2.0 * (0.8 + centerFactor * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(stemBaseX, stemBaseY);
+      ctx.quadraticCurveTo(ctrlX, ctrlY, tipX, tipY);
+      ctx.stroke();
+
+      // Pinnae pairs (leaflets) along the rachis
+      const pinnaePairs = 9 + Math.floor(centerFactor * 4);
+      for (let p = 1; p <= pinnaePairs; p++) {
+        const t = p / (pinnaePairs + 1);
+        // Interpolate point along bezier
+        const it = 1 - t;
+        const px = it * it * stemBaseX + 2 * it * t * ctrlX + t * t * tipX;
+        const py = it * it * stemBaseY + 2 * it * t * ctrlY + t * t * tipY;
+
+        // Tangent angle
+        const dx = 2 * it * (ctrlX - stemBaseX) + 2 * t * (tipX - ctrlX);
+        const dy = 2 * it * (ctrlY - stemBaseY) + 2 * t * (tipY - ctrlY);
+        const tangent = Math.atan2(dy, dx);
+
+        // Pinna length: small at base, peaking at 40%, tapering to spire tip
+        const shapeCurve = Math.sin(t * Math.PI);
+        const pinnaLen = (12 + centerFactor * 14) * shapeCurve * (0.85 + hash(seed + f * 31 + p * 3, 506) * 0.3);
+
+        const pinnaColor = mix(fernMidColor, fernTipColor, t * 0.8);
+        ctx.fillStyle = rgb(pinnaColor, 0.88);
+        ctx.strokeStyle = rgb(pinnaColor, 0.88);
+        ctx.lineWidth = 1.3;
+
+        // Bilateral pinnae on both sides of rachis
+        for (const side of [-1, 1]) {
+          const pinnaAngle = tangent + (Math.PI * 0.5 + side * 0.25) * side;
+          const endPx = px + Math.cos(pinnaAngle) * pinnaLen;
+          const endPy = py + Math.sin(pinnaAngle) * pinnaLen;
+
+          // Serrated pinna blade with tapering pinnule notches
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.quadraticCurveTo(
+            px + Math.cos(pinnaAngle) * pinnaLen * 0.5 - side * 2.5,
+            py + Math.sin(pinnaAngle) * pinnaLen * 0.5,
+            endPx,
+            endPy
+          );
+          ctx.lineTo(
+            px + Math.cos(pinnaAngle) * pinnaLen * 0.4 + side * 2,
+            py + Math.sin(pinnaAngle) * pinnaLen * 0.4 + 2
+          );
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      // Frond apical spire tip
+      ctx.fillStyle = rgb(fernTipColor, 0.95);
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 1.5, 0, TAU);
+      ctx.fill();
+    }
+
+    // ----------------------------------------------------------------
+    // 3. Dense Fine Wild Blade Grass Sprays (Flanking Left & Right)
+    // ----------------------------------------------------------------
+    const drawGrassFlank = (isLeft: boolean) => {
+      const side = isLeft ? -1 : 1;
+      const bladeCount = 22;
+      for (let b = 0; b < bladeCount; b++) {
+        const fr = b / (bladeCount - 1);
+        const bx = x + side * (hw * 0.22 + fr * hw * 0.72) + (hash(seed + b * 17, 507) - 0.5) * 5;
+        const by = gy - mossH * 0.35 + hash(seed + b * 19, 508) * 3;
+
+        const bladeH = h * (0.35 + fr * 0.42 + hash(seed + b * 23, 509) * 0.25);
+        const arch = side * (8 + fr * 22 + hash(seed + b * 29, 510) * 12);
+        const ctrlBx = bx + arch * 0.45;
+        const ctrlBy = by - bladeH * 0.65;
+        const tipBx = bx + arch;
+        const tipBy = by - bladeH;
+
+        const bladeGrad = ctx.createLinearGradient(bx, by, tipBx, tipBy);
+        bladeGrad.addColorStop(0, rgb(grassBaseColor, 0.9));
+        bladeGrad.addColorStop(0.65, rgb(grassTipColor, 0.88));
+        bladeGrad.addColorStop(1, rgb(mix(grassTipColor, pal.rim, 0.35), 0.95));
+
+        ctx.fillStyle = bladeGrad;
+        ctx.beginPath();
+        ctx.moveTo(bx - 1.6, by);
+        ctx.quadraticCurveTo(ctrlBx - 0.8, ctrlBy, tipBx, tipBy);
+        ctx.quadraticCurveTo(ctrlBx + 0.8, ctrlBy, bx + 1.6, by);
+        ctx.closePath();
+        ctx.fill();
+
+        // Occasional specular dewdrop sparkle at grass blade tip
+        if (hash(seed + b * 41, 511) > 0.68) {
+          ctx.fillStyle = rgb(pal.rim, 0.75);
+          ctx.beginPath();
+          ctx.arc(tipBx, tipBy, 1.2, 0, TAU);
+          ctx.fill();
+        }
+      }
+    };
+
+    drawGrassFlank(true); // Left flank grass tuft
+    drawGrassFlank(false); // Right flank grass tuft
+
+    // ----------------------------------------------------------------
+    // 4. Shorter Crinkled Lateral Ferns (Midground Fillers)
+    // ----------------------------------------------------------------
+    for (const side of [-1, 1]) {
+      const cfX = x + side * hw * 0.48;
+      const cfY = gy - mossH * 0.8;
+      const cfLen = h * 0.48;
+      const cfAngle = side * 0.65;
+
       ctx.save();
-      ctx.translate(lx, ly);
-      ctx.rotate(hash(seed + l, 436) * TAU);
-      // 3 palmate leaflets
+      ctx.translate(cfX, cfY);
+      ctx.rotate(cfAngle);
+
+      ctx.strokeStyle = rgb(fernBaseColor, 0.85);
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.ellipse(0, -5, 2.4, 5.5, 0, 0, TAU);
-      ctx.ellipse(-4, -2, 2.2, 4.8, -0.65, 0, TAU);
-      ctx.ellipse(4, -2, 2.2, 4.8, 0.65, 0, TAU);
-      ctx.fill();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(side * 6, -cfLen * 0.5, side * 10, -cfLen);
+      ctx.stroke();
+
+      ctx.fillStyle = rgb(fernMidColor, 0.82);
+      for (let cp = 1; cp <= 6; cp++) {
+        const ct = cp / 7;
+        const cpy = -cfLen * ct;
+        const cpw = 8 * Math.sin(ct * Math.PI);
+        ctx.beginPath();
+        ctx.ellipse(-side * cpw * 0.4, cpy, cpw * 0.5, 2.8, -0.3 * side, 0, TAU);
+        ctx.ellipse(side * cpw * 0.4, cpy, cpw * 0.5, 2.8, 0.3 * side, 0, TAU);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
-    // 5. Glossy Wild Forest Berries (nightshade / blackberries with specular spark)
-    for (let b = 0; b < 6; b++) {
-      const bx = x - hw * 0.6 + hash(seed + b * 11, 437) * ob.w * 0.65;
-      const by = gy - h * (0.35 + hash(seed + b * 13, 438) * 0.4);
-      // Dark indigo/crimson drupelet
-      ctx.fillStyle = "rgba(88, 28, 135, 0.95)";
+    // ----------------------------------------------------------------
+    // 5. Foreground Broadleaf Seedlings (Center Stage Front Cluster)
+    // ----------------------------------------------------------------
+    const seedlingCount = 11;
+    for (let s = 0; s < seedlingCount; s++) {
+      const fr = s / (seedlingCount - 1);
+      const sx = x - hw * 0.32 + fr * hw * 0.64 + (hash(seed + s * 17, 512) - 0.5) * 10;
+      const sy = gy - mossH * 0.3;
+      const sHeight = h * (0.22 + hash(seed + s * 23, 513) * 0.26);
+
+      const lean = (hash(seed + s * 31, 514) - 0.5) * 14;
+      const leafX = sx + lean;
+      const leafY = sy - sHeight;
+
+      // Delicate pale translucent stem
+      ctx.strokeStyle = rgb(seedlingStem, 0.9);
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(bx, by, 3.2, 0, TAU);
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(sx + lean * 0.4, sy - sHeight * 0.5, leafX, leafY);
+      ctx.stroke();
+
+      // Rounded-ovate / cordate leaf blade
+      const leafRadiusX = 5.5 + hash(seed + s * 37, 515) * 3.5;
+      const leafRadiusY = 3.8 + hash(seed + s * 43, 516) * 2.5;
+      const leafTilt = (hash(seed + s * 47, 517) - 0.5) * 0.65;
+
+      // Base leaf volume
+      ctx.fillStyle = rgb(seedlingLeaf, 0.95);
+      ctx.beginPath();
+      ctx.ellipse(leafX, leafY, leafRadiusX, leafRadiusY, leafTilt, 0, TAU);
       ctx.fill();
-      // Bright glint
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+
+      // Subtle central leaf vein line
+      ctx.strokeStyle = rgb(seedlingStem, 0.7);
+      ctx.lineWidth = 0.9;
       ctx.beginPath();
-      ctx.arc(bx - 1, by - 1, 0.9, 0, TAU);
+      ctx.moveTo(leafX - Math.cos(leafTilt) * leafRadiusX * 0.8, leafY - Math.sin(leafTilt) * leafRadiusY * 0.8);
+      ctx.lineTo(leafX + Math.cos(leafTilt) * leafRadiusX * 0.8, leafY + Math.sin(leafTilt) * leafRadiusY * 0.8);
+      ctx.stroke();
+
+      // Smooth top surface highlight catching light
+      ctx.fillStyle = rgb(seedlingHighlight, 0.32);
+      ctx.beginPath();
+      ctx.ellipse(leafX - 1.2, leafY - 1.0, leafRadiusX * 0.55, leafRadiusY * 0.45, leafTilt, 0, TAU);
       ctx.fill();
     }
   }

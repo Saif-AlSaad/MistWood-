@@ -505,16 +505,19 @@ export class Engine {
     type Opt = { min: number; w: number; kinds: ObstacleKind[]; gap: number[] };
     const opts: Opt[] = [
       { min: 0, w: 3, kinds: ["rock"], gap: [0] },
+      { min: 0, w: 3, kinds: ["bramble"], gap: [0] },
       { min: 0, w: 3, kinds: ["log"], gap: [0] },
       { min: 0, w: 2, kinds: ["stump"], gap: [0] },
-      { min: 120, w: 3, kinds: ["bramble"], gap: [0] },
+      { min: 100, w: 3, kinds: ["bramble"], gap: [0] },
+      { min: 180, w: 2, kinds: ["bramble", "rock"], gap: [0, 210] },
       { min: 220, w: 2, kinds: ["rock", "rock"], gap: [0, 185] },
       { min: 300, w: 3, kinds: ["vine"], gap: [0] },
+      { min: 360, w: 2, kinds: ["bramble", "bramble"], gap: [0, 220] },
       { min: 400, w: 2, kinds: ["boulder"], gap: [0] },
       { min: 430, w: 2, kinds: ["rock", "vine"], gap: [0, 250] },
       { min: 520, w: 2, kinds: ["bramble", "rock"], gap: [0, 230] },
       { min: 620, w: 2, kinds: ["log", "log"], gap: [0, 205] },
-      { min: 760, w: 1, kinds: ["rock", "rock", "rock"], gap: [0, 185, 190] },
+      { min: 760, w: 1, kinds: ["rock", "bramble", "rock"], gap: [0, 185, 190] },
       { min: 900, w: 1, kinds: ["vine", "boulder"], gap: [0, 300] },
     ];
     const pool = opts.filter((o) => d >= o.min);
