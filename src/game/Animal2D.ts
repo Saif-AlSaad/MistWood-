@@ -22,6 +22,7 @@ export interface AnimalAnimParams {
   airTime?: number; // Time elapsed during jump in air
   landT?: number; // Time elapsed since touchdown (for landing recovery sequence)
   py?: number; // Player altitude above ground in px
+  slope?: number; // Ground slope in radians for natural terrain alignment
 }
 
 function getFoxAssetUrl(path: string): string {
@@ -484,11 +485,12 @@ export class Animal2DRenderer {
     ctx.save();
     ctx.translate(x, y);
 
-    // Dynamic lean, acrobatic flips & inspection tilt
+    // Dynamic lean, acrobatic flips & inspection tilt, plus natural terrain slope alignment
+    const slopeTilt = isGrounded ? (anim.slope ?? 0) * 0.75 : (anim.slope ?? 0) * 0.25;
     const runningLean = isGrounded && speed > 20 ? 0.05 : 0;
     // Smooth flight pitch based on velocity vector tangent:
     const inAirPitch = !isGrounded ? clamp(-vy * 0.00022, -0.22, 0.25) : 0;
-    const totalRotation = runningLean + inAirPitch + inspectPitch * 0.15 + flipRotation;
+    const totalRotation = runningLean + slopeTilt + inAirPitch + inspectPitch * 0.15 + flipRotation;
 
     // Center-of-mass pivot offset (pivots in air around mid-torso, preventing paws pendulum displacement!)
     const pivotY = -38 * scale;

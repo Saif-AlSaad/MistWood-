@@ -63,6 +63,30 @@ export function samplePalette(phase: number): Palette {
   };
 }
 
+/**
+ * Analytical organic forest floor elevation profile.
+ * Produces gentle, natural rolling knolls, mossy hummocks, and subtle trail dips.
+ */
+export function getGroundElevation(worldX: number, baseGy: number): number {
+  // Long rolling forest trail swells (wavelength ~920px, amplitude ~5.5px)
+  const o1 = Math.sin(worldX * 0.00185) * 5.2 + Math.cos(worldX * 0.0031) * 3.4;
+  // Natural mossy knolls and trail undulations (wavelength ~290px, amplitude ~2.8px)
+  const o2 = Math.sin(worldX * 0.0078 + 1.4) * 2.6 + Math.cos(worldX * 0.0142) * 1.6;
+  // Micro-turf ripples (wavelength ~90px, amplitude ~1.1px)
+  const o3 = Math.sin(worldX * 0.026 - 0.7) * 0.9;
+  return baseGy + o1 + o2 + o3;
+}
+
+/**
+ * Analytical terrain slope (radians) at worldX for animal and obstacle banking/pitch.
+ */
+export function getGroundSlope(worldX: number): number {
+  const d1 = (Math.cos(worldX * 0.00185) * 5.2 * 0.00185) - (Math.sin(worldX * 0.0031) * 3.4 * 0.0031);
+  const d2 = (Math.cos(worldX * 0.0078 + 1.4) * 2.6 * 0.0078) - (Math.sin(worldX * 0.0142) * 1.6 * 0.0142);
+  const d3 = (Math.cos(worldX * 0.026 - 0.7) * 0.9 * 0.026);
+  return d1 + d2 + d3;
+}
+
 /* ------------------------------------------------------------------ */
 /* obstacle factory                                                     */
 /* ------------------------------------------------------------------ */
@@ -1270,32 +1294,84 @@ export class WorldRenderer {
     const totalW = w + overscan * 2;
     const bottomY = h + overscan + 400;
 
-    // 1. Organic soil stratigraphy: top humus & peat layer -> dark rich loam -> mineral subsoil -> bedrock
+    // 1. Distant earthen bank / forest embankment (adds 2.5D terrestrial depth behind the trail)
+    this.renderBackgroundEarthRidge(ctx, w, h, gy, scroll, p);
+
+    // 2. Sculpted organic ground polygon with multi-horizon soil stratigraphy
     this.renderSoilStratigraphy(ctx, x0, totalW, gy, bottomY, scroll, p);
 
-    // 2. Soft directional canopy light pools (dappled sunlight / moonlight filtering onto trail)
+    // 3. Sub-surface capillary root tendrils branching through the dark loam
+    this.renderSubSurfaceRoots(ctx, x0, totalW, gy, scroll, p);
+
+    // 4. Soft directional canopy light pools filtering through foliage onto undulating path
     this.renderCanopyDappledLight(ctx, w, gy, scroll, time, p);
 
-    // 3. Ancient gnarled exposed tree roots (wood grain, longitudinal bark striations, ambient occlusion)
+    // 5. Ancient gnarled exposed tree roots undulating over knolls
     this.renderExposedRoots(ctx, w, gy, scroll, p);
 
-    // 4. Damp velvety moss cushions (muted olive, deep forest green) clustering on soil & roots
+    // 6. Damp velvety moss cushions clustering on soil ridges and root mounds
     this.renderDampMossCushions(ctx, w, gy, scroll, p);
 
-    // 5. Scattered fallen autumn leaves & pine needle mulch in soil hollows
+    // 7. Scattered fallen autumn leaves & pine needle mulch settling in hollows
     this.renderFallenLeavesAndMulch(ctx, w, gy, scroll, p);
 
-    // 6. Embedded river stones & small mineral pebbles with dark damp crevice shadows
+    // 8. Embedded river slate pebbles & dark granite stones with ambient occlusion
     this.renderEmbeddedStones(ctx, w, gy, scroll, p);
 
-    // 7. Damp moisture hollows and glassy water puddles reflecting the forest canopy
+    // 9. Glassy rainwater puddles gathered naturally in terrain dips reflecting canopy
     this.renderPuddles(ctx, w, gy, scroll, time);
 
-    // 8. Surface directional rim light & crisp turf contact baseline (for strong player/obstacle contrast)
-    this.renderSurfaceContactLine(ctx, x0, totalW, w, gy, p);
+    // 10. Organic living turf edge (velvety moss rim, micro-cushions & grazing celestial rim sheen)
+    this.renderLivingTurfEdge(ctx, x0, totalW, w, gy, scroll, p);
   }
 
-  /** Stratified organic earth profile with top humus mulch layer */
+  /** Distant earthen bank / hillside embankment rising behind the trail for 2.5D depth */
+  private renderBackgroundEarthRidge(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const overscan = Math.max(w * 0.5, 600);
+    const x0 = -overscan;
+    const totalW = w + overscan * 2;
+    const bottomY = h + overscan + 400;
+
+    // The background ridge sits slightly higher (gy - 16px) with broader rolling swells
+    const ridgeGrad = ctx.createLinearGradient(0, gy - 26, 0, gy + 32);
+    const ridgeTop = mix(p.treeMid, [16, 20, 14], 0.62);
+    const ridgeBottom = mix(p.ground, [8, 10, 8], 0.88);
+    ridgeGrad.addColorStop(0, rgb(ridgeTop, 0.82));
+    ridgeGrad.addColorStop(0.35, rgb(ridgeBottom, 0.94));
+    ridgeGrad.addColorStop(1, rgb(p.ground, 1.0));
+
+    ctx.beginPath();
+    ctx.moveTo(x0, bottomY);
+    const step = 14;
+    for (let x = x0; x <= totalW + step; x += step) {
+      const curX = Math.min(x, totalW);
+      const wx = scroll * 0.82 + curX;
+      // Broader hillside knolls
+      const ridgeY = gy - 16 + Math.sin(wx * 0.0014) * 7.5 + Math.cos(wx * 0.0035) * 4.2;
+      ctx.lineTo(curX, ridgeY);
+    }
+    ctx.lineTo(totalW, bottomY);
+    ctx.closePath();
+    ctx.fillStyle = ridgeGrad;
+    ctx.fill();
+
+    // Soft misty depth haze in the hollow between the background ridge and foreground trail
+    const mistHaze = ctx.createLinearGradient(0, gy - 22, 0, gy + 8);
+    mistHaze.addColorStop(0, rgb(p.fog, 0.16));
+    mistHaze.addColorStop(0.65, rgb(p.fog, 0.07));
+    mistHaze.addColorStop(1, rgb(p.fog, 0));
+    ctx.fillStyle = mistHaze;
+    ctx.fillRect(x0, gy - 22, totalW, 30);
+  }
+
+  /** Sculpted organic earth polygon with multi-horizon soil stratigraphy */
   private renderSoilStratigraphy(
     ctx: CanvasRenderingContext2D,
     x0: number,
@@ -1305,39 +1381,103 @@ export class WorldRenderer {
     scroll: number,
     p: Palette,
   ): void {
-    const soilGrad = ctx.createLinearGradient(0, gy, 0, bottomY);
-    const topLoam = mix(p.ground, [40, 26, 18], 0.38);
-    const midLoam = mix(p.ground, [24, 16, 12], 0.55);
-    const deepSubsoil = mix(p.ground, [12, 9, 8], 0.82);
+    const soilGrad = ctx.createLinearGradient(0, gy - 12, 0, bottomY);
+    const topLoam = mix(p.ground, [44, 30, 20], 0.42); // rich humus & peat
+    const midLoam = mix(p.ground, [26, 18, 14], 0.58); // dark forest loam
+    const deepSubsoil = mix(p.ground, [14, 10, 9], 0.82); // mineral subsoil
 
     soilGrad.addColorStop(0, rgb(topLoam));
-    soilGrad.addColorStop(0.03, rgb(topLoam));
-    soilGrad.addColorStop(0.12, rgb(midLoam));
+    soilGrad.addColorStop(0.04, rgb(topLoam));
+    soilGrad.addColorStop(0.14, rgb(midLoam));
     soilGrad.addColorStop(0.42, rgb(deepSubsoil));
     soilGrad.addColorStop(1, rgb([3, 4, 6]));
 
+    // Trace the exact continuous undulating terrain profile
+    ctx.beginPath();
+    ctx.moveTo(x0, bottomY);
+    const step = 10;
+    for (let x = x0; x <= totalW + step; x += step) {
+      const curX = Math.min(x, totalW);
+      const curY = getGroundElevation(scroll + curX, gy);
+      ctx.lineTo(curX, curY);
+    }
+    ctx.lineTo(totalW, bottomY);
+    ctx.closePath();
     ctx.fillStyle = soilGrad;
-    ctx.fillRect(x0, gy, totalW, bottomY - gy);
+    ctx.fill();
 
-    // Sub-surface damp mulch strata & organic fiber flecks (top 16px below gy)
-    const mulchStep = 48;
+    // Sub-surface damp mulch strata & organic fiber flecks hugging the undulating surface
+    const mulchStep = 44;
     const m0 = Math.floor((scroll + x0) / mulchStep) - 1;
     const mn = Math.ceil(totalW / mulchStep) + 3;
 
-    ctx.fillStyle = "rgba(10, 6, 4, 0.45)";
+    ctx.fillStyle = "rgba(10, 6, 4, 0.48)";
     for (let k = 0; k < mn; k++) {
       const idx = m0 + k;
-      const mx = idx * mulchStep - scroll + hash(idx, 711) * 22;
-      const my = gy + 2.5 + hash(idx, 712) * 9;
-      const mw = 7 + hash(idx, 713) * 14;
-      const mh = 1.6 + hash(idx, 714) * 2.0;
+      const wx = idx * mulchStep + hash(idx, 711) * 22;
+      const mx = wx - scroll;
+      const surfaceY = getGroundElevation(wx, gy);
+      const my = surfaceY + 3.0 + hash(idx, 712) * 11;
+      const mw = 8 + hash(idx, 713) * 16;
+      const mh = 1.8 + hash(idx, 714) * 2.2;
+      const slope = getGroundSlope(wx);
       ctx.beginPath();
-      ctx.ellipse(mx, my, mw * 0.5, mh * 0.5, (hash(idx, 715) - 0.5) * 0.35, 0, TAU);
+      ctx.ellipse(mx, my, mw * 0.5, mh * 0.5, slope + (hash(idx, 715) - 0.5) * 0.35, 0, TAU);
       ctx.fill();
     }
   }
 
-  /** Soft directional light pools filtering through canopy tree branches onto the path */
+  /** Fine capillary root tendrils and fibrous root networks penetrating down into the loam */
+  private renderSubSurfaceRoots(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    totalW: number,
+    gy: number,
+    scroll: number,
+    p: Palette,
+  ): void {
+    const rootStep = 95;
+    const r0 = Math.floor((scroll + x0) / rootStep) - 1;
+    const rn = Math.ceil(totalW / rootStep) + 3;
+
+    const rootColor = rgb(mix(p.ground, [52, 34, 22], 0.35), 0.55);
+    ctx.strokeStyle = rootColor;
+    ctx.lineCap = "round";
+
+    for (let k = 0; k < rn; k++) {
+      const idx = r0 + k;
+      const hval = hash(idx, 731);
+      if (hval < 0.38) continue;
+
+      const wx = idx * rootStep + hash(idx, 732) * 55;
+      const rx = wx - scroll;
+      const surfaceY = getGroundElevation(wx, gy);
+      const rootLen = 22 + hash(idx, 733) * 32;
+
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(rx, surfaceY + 1.5);
+      const midX = rx + (hash(idx, 734) - 0.5) * 14;
+      const midY = surfaceY + rootLen * 0.5;
+      const endX = midX + (hash(idx, 735) - 0.5) * 16;
+      const endY = surfaceY + rootLen;
+      ctx.quadraticCurveTo(midX, midY, endX, endY);
+      ctx.stroke();
+
+      // Delicate secondary branching capillary
+      if (hash(idx, 736) > 0.45) {
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(midX, midY);
+        const branchX = midX + (hash(idx, 737) > 0.5 ? 9 : -9);
+        const branchY = midY + 14;
+        ctx.lineTo(branchX, branchY);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** Soft directional light pools filtering through canopy tree branches onto the undulating path */
   private renderCanopyDappledLight(
     ctx: CanvasRenderingContext2D,
     w: number,
@@ -1369,7 +1509,8 @@ export class WorldRenderer {
       const px = idx * poolStep - scroll + hash(idx, 812) * 95;
       const pw = 48 + hash(idx, 813) * 65;
       const ph = 7.5 + hash(idx, 814) * 7.5;
-      const py = gy + 3.0 + hash(idx, 815) * 6;
+      const groundAtPx = getGroundElevation(scroll + px, gy);
+      const py = groundAtPx + 3.0 + hash(idx, 815) * 6;
       const sway = Math.sin(time * 0.65 + idx * 1.4) * 5.5;
       const pulse = 0.82 + Math.sin(time * 1.1 + idx * 2.2) * 0.18;
 
@@ -1411,21 +1552,23 @@ export class WorldRenderer {
 
       if (rx + rLen < -overscan || rx - rLen > w + overscan) continue;
 
+      const groundAtRoot = getGroundElevation(scroll + rx + rLen * 0.5, gy);
+
       // 1. Deep ambient occlusion crevice shadow beneath the root
       ctx.fillStyle = "rgba(2, 3, 5, 0.68)";
       ctx.beginPath();
-      ctx.ellipse(rx + rLen * 0.5, gy + rThick * 0.72, rLen * 0.5, rThick * 0.46, 0, 0, TAU);
+      ctx.ellipse(rx + rLen * 0.5, groundAtRoot + rThick * 0.72, rLen * 0.5, rThick * 0.46, 0, 0, TAU);
       ctx.fill();
 
       // 2. Gnarled ancient weathered root body (rich dark umber / chestnut wood)
       const rootWood = mix(p.ground, [46, 32, 22], 0.42);
       ctx.fillStyle = rgb(rootWood);
       ctx.beginPath();
-      ctx.moveTo(rx, gy + 2.5);
-      ctx.quadraticCurveTo(rx + rLen * 0.35, gy - archH, rx + rLen * 0.55, gy - archH * 0.7);
-      ctx.quadraticCurveTo(rx + rLen * 0.75, gy - archH * 0.4, rx + rLen, gy + 3.5);
-      ctx.quadraticCurveTo(rx + rLen * 0.6, gy + rThick * 0.85, rx + rLen * 0.4, gy + rThick);
-      ctx.quadraticCurveTo(rx + rLen * 0.15, gy + rThick * 0.75, rx, gy + 2.5);
+      ctx.moveTo(rx, groundAtRoot + 2.5);
+      ctx.quadraticCurveTo(rx + rLen * 0.35, groundAtRoot - archH, rx + rLen * 0.55, groundAtRoot - archH * 0.7);
+      ctx.quadraticCurveTo(rx + rLen * 0.75, groundAtRoot - archH * 0.4, rx + rLen, groundAtRoot + 3.5);
+      ctx.quadraticCurveTo(rx + rLen * 0.6, groundAtRoot + rThick * 0.85, rx + rLen * 0.4, groundAtRoot + rThick);
+      ctx.quadraticCurveTo(rx + rLen * 0.15, groundAtRoot + rThick * 0.75, rx, groundAtRoot + 2.5);
       ctx.closePath();
       ctx.fill();
 
@@ -1434,9 +1577,9 @@ export class WorldRenderer {
       ctx.strokeStyle = rgb(woodHighlight, 0.65);
       ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.moveTo(rx + 5, gy + 1);
-      ctx.quadraticCurveTo(rx + rLen * 0.35, gy - archH + 0.8, rx + rLen * 0.55, gy - archH * 0.7 + 0.8);
-      ctx.quadraticCurveTo(rx + rLen * 0.75, gy - archH * 0.4 + 0.8, rx + rLen - 6, gy + 2);
+      ctx.moveTo(rx + 5, groundAtRoot + 1);
+      ctx.quadraticCurveTo(rx + rLen * 0.35, groundAtRoot - archH + 0.8, rx + rLen * 0.55, groundAtRoot - archH * 0.7 + 0.8);
+      ctx.quadraticCurveTo(rx + rLen * 0.75, groundAtRoot - archH * 0.4 + 0.8, rx + rLen - 6, groundAtRoot + 2);
       ctx.stroke();
 
       // 4. Longitudinal bark striations and weathered grain marks
@@ -1445,8 +1588,8 @@ export class WorldRenderer {
       for (let s = 1; s <= 4; s++) {
         const sx = rx + (rLen * s) / 5;
         ctx.beginPath();
-        ctx.moveTo(sx - 2, gy - archH * 0.35);
-        ctx.lineTo(sx + 1.5, gy + rThick * 0.52);
+        ctx.moveTo(sx - 2, groundAtRoot - archH * 0.35);
+        ctx.lineTo(sx + 1.5, groundAtRoot + rThick * 0.52);
         ctx.stroke();
       }
 
@@ -1454,8 +1597,8 @@ export class WorldRenderer {
       const mossOlive: RGB = mix(p.ground, [48, 68, 26], 0.5);
       ctx.fillStyle = rgb(mossOlive, 0.85);
       ctx.beginPath();
-      ctx.ellipse(rx + rLen * 0.28, gy - archH * 0.4, 7.5, 2.5, -0.2, 0, TAU);
-      ctx.ellipse(rx + rLen * 0.65, gy - archH * 0.25, 9, 2.8, 0.15, 0, TAU);
+      ctx.ellipse(rx + rLen * 0.28, groundAtRoot - archH * 0.4, 7.5, 2.5, -0.2, 0, TAU);
+      ctx.ellipse(rx + rLen * 0.65, groundAtRoot - archH * 0.25, 9, 2.8, 0.15, 0, TAU);
       ctx.fill();
     }
   }
@@ -1488,23 +1631,25 @@ export class WorldRenderer {
 
       if (mx + mw < -overscan || mx - mw > w + overscan) continue;
 
+      const mossGy = getGroundElevation(scroll + mx, gy);
+
       // Deep damp base
       ctx.fillStyle = rgb(deepMoss, 0.94);
       ctx.beginPath();
-      ctx.ellipse(mx, gy + mh * 0.22, mw * 0.5, mh, 0, Math.PI, 0);
+      ctx.ellipse(mx, mossGy + mh * 0.22, mw * 0.5, mh, 0, Math.PI, 0);
       ctx.fill();
 
       // Velvety muted olive cushion mound
       ctx.fillStyle = rgb(oliveCushion, 0.88);
       ctx.beginPath();
-      ctx.ellipse(mx - mw * 0.06, gy - mh * 0.32, mw * 0.38, mh * 0.52, 0, Math.PI, 0);
+      ctx.ellipse(mx - mw * 0.06, mossGy - mh * 0.32, mw * 0.38, mh * 0.52, 0, Math.PI, 0);
       ctx.fill();
 
       // Delicate damp stippled texture dots
       ctx.fillStyle = rgb(mossHighlight, 0.45);
       for (let d = 0; d < 4; d++) {
         const dotX = mx + (hash(idx * 7 + d, 855) - 0.5) * (mw * 0.68);
-        const dotY = gy - mh * 0.42 + hash(idx * 7 + d, 856) * (mh * 0.38);
+        const dotY = mossGy - mh * 0.42 + hash(idx * 7 + d, 856) * (mh * 0.38);
         ctx.fillRect(dotX, dotY, 1.2, 1.2);
       }
     }
@@ -1536,8 +1681,10 @@ export class WorldRenderer {
       if (hval < 0.28) continue;
 
       const lx = idx * leafStep - scroll + hash(idx, 872) * 45;
-      const ly = gy + 0.8 + hash(idx, 873) * 3.5;
-      const angle = (hash(idx, 874) - 0.5) * 1.2;
+      const leafGy = getGroundElevation(scroll + lx, gy);
+      const leafSlope = getGroundSlope(scroll + lx);
+      const ly = leafGy + 0.8 + hash(idx, 873) * 3.5;
+      const angle = leafSlope + (hash(idx, 874) - 0.5) * 1.2;
       const leafScale = 0.8 + hash(idx, 875) * 0.45;
       const leafColor = leafTones[Math.floor(hash(idx, 876) * leafTones.length)];
 
@@ -1616,7 +1763,8 @@ export class WorldRenderer {
       const sx = idx * stoneStep - scroll + hash(idx, 882) * 55;
       const sw = 7.5 + hash(idx, 883) * 12;
       const sh = sw * 0.46;
-      const sy = gy + 0.8 + hash(idx, 884) * 2.2;
+      const stoneGy = getGroundElevation(scroll + sx, gy);
+      const sy = stoneGy + 0.8 + hash(idx, 884) * 2.2;
       const stoneColor = stoneTones[Math.floor(hash(idx, 885) * stoneTones.length)];
 
       if (sx + sw < -overscan || sx - sw > w + overscan) continue;
@@ -1639,39 +1787,81 @@ export class WorldRenderer {
     }
   }
 
-  /** Surface directional rim light & crisp turf contact baseline */
-  private renderSurfaceContactLine(
+  /** Organic living turf edge: velvety moss rim, micro-cushions, soil crumbs & grazing celestial light */
+  private renderLivingTurfEdge(
     ctx: CanvasRenderingContext2D,
     x0: number,
     totalW: number,
     w: number,
     gy: number,
+    scroll: number,
     p: Palette,
   ): void {
     const sunXpx = p.sunX * w;
+    const step = 8;
 
-    // Atmospheric sheen along ground surface
-    const sheen = ctx.createLinearGradient(0, gy - 1, 0, gy + 28);
-    sheen.addColorStop(0, rgb(p.rim, 0.26));
-    sheen.addColorStop(0.35, rgb(p.rim, 0.07));
-    sheen.addColorStop(1, rgb(p.rim, 0));
-    ctx.fillStyle = sheen;
-    ctx.fillRect(x0, gy - 1, totalW, 29);
+    // 1. Velvety damp moss rim stroke following the exact terrain contour
+    const mossRimColor = mix(p.ground, [68, 92, 38], 0.55);
+    ctx.strokeStyle = rgb(mossRimColor, 0.72);
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(x0, getGroundElevation(scroll + x0, gy));
+    for (let x = x0 + step; x <= totalW; x += step) {
+      const curX = Math.min(x, totalW);
+      ctx.lineTo(curX, getGroundElevation(scroll + curX, gy));
+    }
+    ctx.stroke();
 
-    // Directional celestial rim highlight directly beneath celestial body
-    const celRim = ctx.createRadialGradient(sunXpx, gy, 2, sunXpx, gy, w * 0.55);
-    celRim.addColorStop(0, rgb(p.rim, 0.28));
-    celRim.addColorStop(0.5, rgb(p.rim, 0.08));
-    celRim.addColorStop(1, rgb(p.rim, 0));
+    // 2. Grazing directional celestial highlight along terrain knoll crests
+    ctx.strokeStyle = rgb(p.rim, 0.42);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x0, getGroundElevation(scroll + x0, gy) - 0.4);
+    for (let x = x0 + step; x <= totalW; x += step) {
+      const curX = Math.min(x, totalW);
+      const wx = scroll + curX;
+      const curY = getGroundElevation(wx, gy) - 0.4;
+      ctx.lineTo(curX, curY);
+    }
+    ctx.stroke();
+
+    // 3. Delicate micro-moss cushions & crumbly soil nodules along the living edge
+    const beadStep = 18;
+    const b0 = Math.floor((scroll + x0) / beadStep) - 1;
+    const bn = Math.ceil(totalW / beadStep) + 3;
+
+    ctx.fillStyle = rgb(mix(p.ground, [48, 72, 28], 0.6), 0.85);
+    for (let k = 0; k < bn; k++) {
+      const idx = b0 + k;
+      const wx = idx * beadStep + hash(idx, 751) * 10;
+      const bx = wx - scroll;
+      const by = getGroundElevation(wx, gy);
+      const r = 1.4 + hash(idx, 752) * 1.8;
+      ctx.beginPath();
+      ctx.arc(bx, by - 0.2, r, 0, TAU);
+      ctx.fill();
+    }
+
+    // 4. Soft atmospheric moisture sheen in front of sun/moon horizon
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    const celRim = ctx.createRadialGradient(sunXpx, gy, 4, sunXpx, gy, w * 0.55);
+    celRim.addColorStop(0, rgb(p.rim, 0.22));
+    celRim.addColorStop(0.5, rgb(p.rim, 0.06));
+    celRim.addColorStop(1, rgb(p.rim, 0));
     ctx.fillStyle = celRim;
-    ctx.fillRect(x0, gy - 1, totalW, 20);
+    ctx.beginPath();
+    ctx.moveTo(x0, gy + 35);
+    for (let x = x0; x <= totalW + step; x += step) {
+      const curX = Math.min(x, totalW);
+      ctx.lineTo(curX, getGroundElevation(scroll + curX, gy) - 1.5);
+    }
+    ctx.lineTo(totalW, gy + 35);
+    ctx.closePath();
+    ctx.fill();
     ctx.restore();
-
-    // Sharp top turf contact line (rock solid, continuous across entire viewport, high contrast for player/obstacles)
-    ctx.fillStyle = rgb(p.rim, 0.38);
-    ctx.fillRect(x0, gy - 0.5, totalW, 1.3);
   }
 
   /** Glassy water puddles reflecting the sky and silhouetted forest canopy */
@@ -1696,7 +1886,8 @@ export class WorldRenderer {
       const px = idx * puddleStep - scroll + hash(idx, 902) * 220;
       const pw = 48 + hash(idx, 903) * 75;
       const ph = 5.5 + hash(idx, 904) * 4.5;
-      const py = gy + 1.2 + hash(idx, 905) * 3;
+      const puddleGy = getGroundElevation(scroll + px, gy);
+      const py = puddleGy + 1.2 + hash(idx, 905) * 3;
 
       if (px + pw < -overscan || px - pw > w + overscan) continue;
 
@@ -1766,7 +1957,8 @@ export class WorldRenderer {
     const n = Math.ceil((w + overscan * 2) / step) + 3;
     for (let k = 0; k < n; k++) {
       const i = i0 + k;
-      const sx = i * step - scroll + hash(i, 91) * 8;
+      const wx = i * step + hash(i, 91) * 8;
+      const sx = wx - scroll;
       let hh = 7 + hash(i, 92) * 18;
       let lean = (hash(i, 93) - 0.5) * 6 + Math.sin(time * 1.3 + i * 0.35) * 2.4;
 
@@ -1799,9 +1991,10 @@ export class WorldRenderer {
         }
       }
 
-      ctx.moveTo(sx - 1.25, gy + 2);
-      ctx.lineTo(sx + lean, gy - hh);
-      ctx.lineTo(sx + 1.25, gy + 2);
+      const plantGy = getGroundElevation(wx, gy);
+      ctx.moveTo(sx - 1.25, plantGy + 2);
+      ctx.lineTo(sx + lean, plantGy - hh);
+      ctx.lineTo(sx + 1.25, plantGy + 2);
     }
     ctx.fill();
 
@@ -1814,7 +2007,8 @@ export class WorldRenderer {
     for (let k = 0; k < tn; k++) {
       const i = t0 + k;
       if (hash(i, 94) < 0.3) continue;
-      const bx = i * tStep - scroll + hash(i, 95) * 50;
+      const wx = i * tStep + hash(i, 95) * 50;
+      const bx = wx - scroll;
       const blades = 3 + ((hash(i, 96) * 3) | 0);
       const dx = bx - playerX;
 
@@ -1839,12 +2033,13 @@ export class WorldRenderer {
         }
       }
 
+      const tuftGy = getGroundElevation(wx, gy);
       for (let b = 0; b < blades; b++) {
         const hh = (22 + hash(i * 7 + b, 97) * 26) * tuftCrush;
         const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6 + tuftPush;
-        ctx.moveTo(bx - 2, gy + 2);
-        ctx.lineTo(bx + lean, gy - hh);
-        ctx.lineTo(bx + 2, gy + 2);
+        ctx.moveTo(bx - 2, tuftGy + 2);
+        ctx.lineTo(bx + lean, tuftGy - hh);
+        ctx.lineTo(bx + 2, tuftGy + 2);
       }
     }
     ctx.fill();
@@ -1854,7 +2049,8 @@ export class WorldRenderer {
     for (let k = 0; k < tn; k++) {
       const i = t0 + k;
       if (hash(i, 94) < 0.3) continue;
-      const bx = i * tStep - scroll + hash(i, 95) * 50;
+      const wx = i * tStep + hash(i, 95) * 50;
+      const bx = wx - scroll;
       const blades = 3 + ((hash(i, 96) * 3) | 0);
       const dx = bx - playerX;
 
@@ -1879,13 +2075,14 @@ export class WorldRenderer {
         }
       }
 
+      const tuftGy = getGroundElevation(wx, gy);
       for (let b = 0; b < blades; b++) {
         if (hash(i * 11 + b, 991) > 0.55) {
           const hh = (22 + hash(i * 7 + b, 97) * 26) * tuftCrush;
           const lean = (b - blades / 2) * 7 + Math.sin(time * 1.1 + i) * 2.6 + tuftPush;
           const dewSparkle = Math.abs(tuftPush) > 2 ? 1.6 : 1.2;
           ctx.beginPath();
-          ctx.arc(bx + lean, gy - hh, dewSparkle, 0, TAU);
+          ctx.arc(bx + lean, tuftGy - hh, dewSparkle, 0, TAU);
           ctx.fill();
         }
       }
@@ -1897,36 +2094,38 @@ export class WorldRenderer {
     const sn = Math.ceil((w + overscan * 2) / sStep) + 3;
     for (let k = 0; k < sn; k++) {
       const i = s0 + k;
-      const sx = i * sStep - scroll + hash(i, 98) * 90;
+      const wx = i * sStep + hash(i, 98) * 90;
+      const sx = wx - scroll;
+      const eleGy = getGroundElevation(wx, gy);
       if (hash(i, 99) < 0.4) {
         const sw = 8 + hash(i, 100) * 18;
         const sh = sw * 0.45;
         ctx.fillStyle = rgb(mix(this.pal.ground, [0, 0, 0], 0.4));
         ctx.beginPath();
-        ctx.ellipse(sx, gy + sh * 0.2, sw * 0.5, sh, 0, Math.PI, 0);
+        ctx.ellipse(sx, eleGy + sh * 0.2, sw * 0.5, sh, 0, Math.PI, 0);
         ctx.fill();
         ctx.fillStyle = rgb(this.pal.rim, 0.12);
-        ctx.fillRect(sx - sw * 0.32, gy + sh * 0.2 - sh - 1, sw * 0.64, 1);
+        ctx.fillRect(sx - sw * 0.32, eleGy + sh * 0.2 - sh - 1, sw * 0.64, 1);
       } else if (hash(i, 101) < 0.22) {
         // little glowing mushroom
         const mh = 7 + hash(i, 102) * 6;
         ctx.fillStyle = rgb(mix(this.pal.fog, this.pal.ground, 0.4), 0.9);
-        ctx.fillRect(sx - 1, gy - mh, 2, mh);
+        ctx.fillRect(sx - 1, eleGy - mh, 2, mh);
         ctx.fillStyle = rgb(this.pal.accent, 0.35 + this.pal.night * 0.5);
         ctx.beginPath();
-        ctx.ellipse(sx, gy - mh, 4.5, 2.8, 0, Math.PI, 0);
+        ctx.ellipse(sx, eleGy - mh, 4.5, 2.8, 0, Math.PI, 0);
         ctx.fill();
 
         // Soft bioluminescent glow aura around mushroom cap
         if (this.pal.night > 0.05) {
           ctx.save();
           ctx.globalCompositeOperation = "lighter";
-          const mshGlow = ctx.createRadialGradient(sx, gy - mh, 1, sx, gy - mh, 16);
+          const mshGlow = ctx.createRadialGradient(sx, eleGy - mh, 1, sx, eleGy - mh, 16);
           mshGlow.addColorStop(0, rgb(this.pal.accent, 0.35 * this.pal.night));
           mshGlow.addColorStop(1, rgb(this.pal.accent, 0));
           ctx.fillStyle = mshGlow;
           ctx.beginPath();
-          ctx.arc(sx, gy - mh, 16, 0, TAU);
+          ctx.arc(sx, eleGy - mh, 16, 0, TAU);
           ctx.fill();
           ctx.restore();
         }
@@ -1942,20 +2141,22 @@ export class WorldRenderer {
     for (let k = 0; k < cn; k++) {
       const i = c0 + k;
       if (hash(i, 941) < 0.36) continue;
-      const cx = i * cStep - scroll + hash(i, 942) * 60;
+      const wx = i * cStep + hash(i, 942) * 60;
+      const cx = wx - scroll;
       const sh = 5.5 + hash(i, 943) * 5.5;
+      const eleGy = getGroundElevation(wx, gy);
       ctx.strokeStyle = rgb(mix(this.pal.ground, [32, 52, 22], 0.5), 0.85);
       ctx.lineWidth = 1.1;
       ctx.beginPath();
-      ctx.moveTo(cx, gy + 1);
-      ctx.lineTo(cx, gy - sh);
+      ctx.moveTo(cx, eleGy + 1);
+      ctx.lineTo(cx, eleGy - sh);
       ctx.stroke();
 
       // Pair of delicate obovate leaflets
       ctx.fillStyle = rgb(seedlingColor, 0.85);
       for (const side of [-1, 1]) {
         ctx.beginPath();
-        ctx.ellipse(cx + side * 3.2, gy - sh - 0.8, 3.0, 1.9, side * 0.38, 0, TAU);
+        ctx.ellipse(cx + side * 3.2, eleGy - sh - 0.8, 3.0, 1.9, side * 0.38, 0, TAU);
         ctx.fill();
       }
     }

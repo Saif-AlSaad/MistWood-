@@ -245,6 +245,7 @@ export class Player {
     k: number,
     _legacyPelt?: FoxPelt,
     speed = 360,
+    slope = 0,
   ): void {
     const fade = this.dead ? Math.max(0, 1 - this.deadT * 1.8) : 1;
     if (fade <= 0) return;
@@ -259,10 +260,10 @@ export class Player {
       const footRadius = (phys.hitboxHalfWidth + 12) * k;
       const shadowLength = (phys.hitboxHalfWidth * 1.8 - this.py * 0.035) * k;
 
-      // Soft diffuse ambient ground shadow
+      // Soft diffuse ambient ground shadow tilted with terrain slope
       ctx.fillStyle = `rgba(0,0,0,${(shadowAlpha * 0.5).toFixed(3)})`;
       ctx.beginPath();
-      ctx.ellipse(x, gy + 5 * k, Math.max(16, shadowLength), 8 * k, 0, 0, TAU);
+      ctx.ellipse(x, gy + 5 * k, Math.max(16, shadowLength), 8 * k, slope, 0, TAU);
       ctx.fill();
 
       // Tight direct contact shadow when close to ground
@@ -270,7 +271,7 @@ export class Player {
         const contactA = (1 - this.py / 40) * 0.55;
         ctx.fillStyle = `rgba(0,0,0,${contactA.toFixed(3)})`;
         ctx.beginPath();
-        ctx.ellipse(x, gy + 3 * k, footRadius, 4 * k, 0, 0, TAU);
+        ctx.ellipse(x, gy + 3 * k, footRadius, 4 * k, slope, 0, TAU);
         ctx.fill();
       }
     }
@@ -320,6 +321,7 @@ export class Player {
       airTime: this.airTime,
       landT: this.landT,
       py: this.py,
+      slope,
     });
     ctx.restore();
   }

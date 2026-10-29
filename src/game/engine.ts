@@ -3,7 +3,7 @@
 import { AudioEngine } from "./audio";
 import { Particles } from "./particles";
 import { Player, type LandingInfo } from "./player";
-import { SEGMENTS, WorldRenderer, makeObstacle } from "./world";
+import { SEGMENTS, WorldRenderer, makeObstacle, getGroundElevation, getGroundSlope } from "./world";
 import type { Bloom, Fly, FoxPelt, GameSettings, GameState, HUDData, Obstacle, ObstacleKind, Stats } from "./types";
 import { DEFAULT_SETTINGS, FOX_PELTS, clamp, lerp, rand, speedToKmh } from "./types";
 import type { AnimalDefinition } from "./animals";
@@ -461,8 +461,8 @@ export class Engine {
   /* ------------------------------------------------------------ */
 
   private onPlayerEvent(e: "jump" | "dbl" | "land", info?: LandingInfo): void {
-    const gy = this.groundY;
     const x = this.foxX;
+    const gy = this.getGroundYAt(this.scroll + x);
     if (e === "jump") {
       this.audio.jump();
       haptics.jump();
@@ -499,6 +499,10 @@ export class Engine {
 
   private get groundY(): number {
     return this.h * 0.78;
+  }
+
+  private getGroundYAt(worldX: number): number {
+    return getGroundElevation(worldX, this.groundY);
   }
 
   private get foxX(): number {
@@ -564,11 +568,13 @@ export class Engine {
       for (let i = 0; i < n; i++) {
         const fr = n === 1 ? 0.5 : i / (n - 1);
         const arc = Math.sin(fr * Math.PI);
+        const flyX = fo.x + (fr - 0.5) * 220 * (high ? 1.4 : 1);
+        const flyBaseGy = this.getGroundYAt(flyX);
         const y = high
-          ? this.groundY - 70 - arc * 140
-          : this.groundY - 40 - arc * 36;
+          ? flyBaseGy - 70 - arc * 140
+          : flyBaseGy - 40 - arc * 36;
         this.flies.push({
-          x: fo.x + (fr - 0.5) * 220 * (high ? 1.4 : 1),
+          x: flyX,
           y,
           baseY: y,
           phase: rand(Math.PI * 2),
@@ -582,9 +588,11 @@ export class Engine {
 
     // spirit bloom pickup
     if (this.scroll + this.w >= this.nextBloomAt && !this.bloom) {
+      const bloomX = startX + patternLen + rand(120, 240);
+      const bloomGy = this.getGroundYAt(bloomX);
       this.bloom = {
-        x: startX + patternLen + rand(120, 240),
-        y: this.groundY - rand(70, 130),
+        x: bloomX,
+        y: bloomGy - rand(70, 130),
         phase: rand(Math.PI * 2),
       };
       this.nextBloomAt += 16 * rand(450, 700);
@@ -754,25 +762,27 @@ export class Engine {
         this.speed,
       );
 
+      const runnerGy = this.getGroundYAt(this.scroll + this.foxX);
+
       // footsteps / slide dust / streak
       if (this.player.stepPulse()) {
-        this.particles.dust(this.foxX - 14 * this.foxScale, this.groundY, 1);
+        this.particles.dust(this.foxX - 14 * this.foxScale, runnerGy, 1);
       }
       if (this.player.sliding) {
         this.trailTimer -= dt;
         if (this.trailTimer <= 0) {
           this.trailTimer = 0.04;
-          this.particles.dust(this.foxX - 20, this.groundY, 2);
-          this.particles.streak(this.foxX - 16, this.groundY - 12, this.speed * 0.14);
+          this.particles.dust(this.foxX - 20, runnerGy, 2);
+          this.particles.streak(this.foxX - 16, runnerGy - 12, this.speed * 0.14);
           if (Math.random() < 0.28) {
-            this.particles.leaf(this.foxX - 12, this.groundY - 6);
+            this.particles.leaf(this.foxX - 12, runnerGy - 6);
           }
         }
       } else if (this.player.flipT > 0) {
         this.trailTimer -= dt;
         if (this.trailTimer <= 0) {
           this.trailTimer = 0.035;
-          this.particles.sparks(this.foxX - 8, this.groundY - this.player.py - 24, 2);
+          this.particles.sparks(this.foxX - 8, runnerGy - this.player.py - 24, 2);
         }
       } else if (this.player.ghostT > 0) {
         this.trailTimer -= dt;
@@ -780,7 +790,7 @@ export class Engine {
           this.trailTimer = 0.04;
           this.particles.spores(
             this.foxX - 26,
-            this.groundY - this.player.py - 30,
+            runnerGy - this.player.py - 30,
             1,
           );
         }
@@ -828,9 +838,9 @@ export class Engine {
   }
 
   private updateObjects(dt: number): void {
-    const gy = this.groundY;
     const fx = this.foxX;
-    const hb = this.player.hb(fx, gy);
+    const runnerGy = this.getGroundYAt(this.scroll + fx);
+    const hb = this.player.hb(fx, runnerGy);
 
     // obstacles — offscreen cull + collision
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
@@ -841,20 +851,21 @@ export class Engine {
       }
       const sx = ob.x - this.scroll;
       if (sx < -80 || sx > this.w + 80) continue;
+      const obGy = this.getGroundYAt(ob.x);
       let b: [number, number, number, number];
       switch (ob.kind) {
         case "vine":
           // tip hovers just above sliding height — duck beneath it
-          b = [sx - 9, gy - 44, sx + 9, gy - 33];
+          b = [sx - 9, obGy - 44, sx + 9, obGy - 33];
           break;
         case "log":
-          b = [sx - ob.w / 2 + 6, gy - ob.h + 6, sx + ob.w / 2 - 6, gy - 4];
+          b = [sx - ob.w / 2 + 6, obGy - ob.h + 6, sx + ob.w / 2 - 6, obGy - 4];
           break;
         case "bramble":
-          b = [sx - ob.w / 2 + 9, gy - ob.h + 9, sx + ob.w / 2 - 9, gy - 3];
+          b = [sx - ob.w / 2 + 9, obGy - ob.h + 9, sx + ob.w / 2 - 9, obGy - 3];
           break;
         default:
-          b = [sx - ob.w * 0.42, gy - ob.h + 5, sx + ob.w * 0.42, gy - 2];
+          b = [sx - ob.w * 0.42, obGy - ob.h + 5, sx + ob.w * 0.42, obGy - 2];
       }
       if (
         hb[0] < b[2] && hb[2] > b[0] &&
@@ -894,7 +905,7 @@ export class Engine {
       }
       const sx = f.x - this.scroll;
       const fy = f.y || f.baseY;
-      const pcy = gy - this.player.py - 28;
+      const pcy = runnerGy - this.player.py - 28;
       const dx = fx - sx;
       const dy = pcy - fy;
       const dd = Math.hypot(dx, dy);
@@ -917,7 +928,7 @@ export class Engine {
         this.bloom = null;
       } else {
         const sx = this.bloom.x - this.scroll;
-        const pcy = gy - this.player.py - 28;
+        const pcy = runnerGy - this.player.py - 28;
         if (Math.hypot(fx - sx, pcy - this.bloom.y) < 42) {
           this.player.ghostT = 4.5;
           this.audio.bloom();
@@ -940,9 +951,9 @@ export class Engine {
     this.deadReal = 0;
     this.audio.death();
     haptics.death();
-    const gy = this.groundY;
-    this.particles.spores(this.foxX, gy - this.player.py - 26, 22, true);
-    this.particles.dust(this.foxX, gy, 10);
+    const runnerGy = this.getGroundYAt(this.scroll + this.foxX);
+    this.particles.spores(this.foxX, runnerGy - this.player.py - 26, 22, true);
+    this.particles.dust(this.foxX, runnerGy, 10);
     if (!this.reduced && this.settings.screenShake) this.shake = 13;
   }
 
@@ -1005,24 +1016,27 @@ export class Engine {
     for (const ob of this.obstacles) {
       const sx = ob.x - this.scroll;
       if (sx < -260 || sx > w + 260) continue;
+      const obGy = this.getGroundYAt(ob.x);
       ctx.save();
       ctx.translate(sx, 0);
       const obS = { ...ob, x: 0 };
-      this.world.renderObstacle(ctx, obS, gy, this.time);
+      this.world.renderObstacle(ctx, obS, obGy, this.time);
       ctx.restore();
     }
 
     if (this.bloom) {
       const sx = this.bloom.x - this.scroll;
       if (sx > -160 && sx < w + 160) {
-        this.world.renderBloom(ctx, { x: sx, y: this.bloom.y, phase: this.bloom.phase }, this.time, gy);
+        const bloomGy = this.getGroundYAt(this.bloom.x);
+        this.world.renderBloom(ctx, { x: sx, y: this.bloom.y, phase: this.bloom.phase }, this.time, bloomGy);
       }
     }
 
     for (const f of this.flies) {
       const sx = f.x - this.scroll;
       if (sx < -120 || sx > w + 120) continue;
-      this.world.renderFly(ctx, { ...f, x: sx } as Fly, this.time, gy);
+      const flyGy = this.getGroundYAt(f.x);
+      this.world.renderFly(ctx, { ...f, x: sx } as Fly, this.time, flyGy);
       // keep world-space hover sync
       f.y = f.baseY + Math.sin(this.time * 2.1 + f.phase) * 9;
     }
@@ -1042,7 +1056,9 @@ export class Engine {
     );
 
     if (this.state !== "menu" && this.state !== "over") {
-      this.player.render(ctx, this.foxX, gy, pal, this.time, this.foxScale, undefined, this.speed);
+      const runnerGy = this.getGroundYAt(this.scroll + this.foxX);
+      const runnerSlope = getGroundSlope(this.scroll + this.foxX);
+      this.player.render(ctx, this.foxX, runnerGy, pal, this.time, this.foxScale, undefined, this.speed, runnerSlope);
     }
 
     this.particles.renderFlat(ctx, pal);
