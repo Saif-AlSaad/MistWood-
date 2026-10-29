@@ -131,10 +131,24 @@ export class Engine {
     this.last = performance.now();
     const loop = (ts: number) => {
       if (this.disposed) return;
-      const dt = clamp((ts - this.last) / 1000, 0, 0.033) * this.timeScale;
+      const rawDt = Math.max(0, (ts - this.last) / 1000);
       this.last = ts;
-      this.time += dt;
-      this.update(dt);
+      // High refresh rate support: clamp max frame delta to 0.066s (15fps lower bound)
+      const totalDt = clamp(rawDt, 0, 0.066) * this.timeScale;
+      this.time += totalDt;
+
+      // Sub-step physics if dt > 1/120s to guarantee 120Hz+ physics simulation precision on all displays
+      const maxSubStep = 1 / 120;
+      if (totalDt > maxSubStep) {
+        const steps = Math.min(4, Math.ceil(totalDt / maxSubStep));
+        const subDt = totalDt / steps;
+        for (let i = 0; i < steps; i++) {
+          this.update(subDt);
+        }
+      } else if (totalDt > 0) {
+        this.update(totalDt);
+      }
+
       this.render();
       this.raf = requestAnimationFrame(loop);
     };
@@ -659,19 +673,23 @@ export class Engine {
       const targetZoom = this.settings.speedEffects && !this.reduced
         ? 1 - speedRatio * 0.055
         : 1;
-      this.cameraZoom += (targetZoom - this.cameraZoom) * dt * 2.8;
+      const zoomBlend = 1 - Math.exp(-2.8 * dt);
+      this.cameraZoom += (targetZoom - this.cameraZoom) * zoomBlend;
 
       // Stable grounded camera: ground stays anchored, gently lead high leaps above 100px
       const highJumpExcess = Math.max(0, this.player.py - 100);
       const targetCamY = !this.reduced ? highJumpExcess * 0.05 : 0;
-      this.cameraY += (targetCamY - this.cameraY) * dt * 4.5;
-      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 12);
+      const camYBlend = 1 - Math.exp(-4.5 * dt);
+      this.cameraY += (targetCamY - this.cameraY) * camYBlend;
+      const bounceBlend = 1 - Math.exp(-12 * dt);
+      this.cameraBounceY += (0 - this.cameraBounceY) * bounceBlend;
 
       let targetTilt = 0;
       if (!this.reduced && this.player.sliding) {
         targetTilt = -0.005;
       }
-      this.cameraTilt += (targetTilt - this.cameraTilt) * Math.min(1, dt * 4.0);
+      const tiltBlend = 1 - Math.exp(-4.0 * dt);
+      this.cameraTilt += (targetTilt - this.cameraTilt) * tiltBlend;
 
       // High speed wind streaks
       if (this.speed > 520 && this.settings.speedEffects) {
@@ -750,6 +768,12 @@ export class Engine {
             this.particles.leaf(this.foxX - 12, this.groundY - 6);
           }
         }
+      } else if (this.player.flipT > 0) {
+        this.trailTimer -= dt;
+        if (this.trailTimer <= 0) {
+          this.trailTimer = 0.035;
+          this.particles.sparks(this.foxX - 8, this.groundY - this.player.py - 24, 2);
+        }
       } else if (this.player.ghostT > 0) {
         this.trailTimer -= dt;
         if (this.trailTimer <= 0) {
@@ -771,10 +795,10 @@ export class Engine {
         this.particles.leaf(this.scroll % 200 + this.w + 30, rand(50, this.h * 0.4));
       }
     } else {
-      this.cameraZoom += (1 - this.cameraZoom) * Math.min(1, dt * 6.0);
-      this.cameraY += (0 - this.cameraY) * Math.min(1, dt * 8.0);
-      this.cameraBounceY += (0 - this.cameraBounceY) * Math.min(1, dt * 14.0);
-      this.cameraTilt += (0 - this.cameraTilt) * Math.min(1, dt * 8.0);
+      this.cameraZoom += (1 - this.cameraZoom) * (1 - Math.exp(-6.0 * dt));
+      this.cameraY += (0 - this.cameraY) * (1 - Math.exp(-8.0 * dt));
+      this.cameraBounceY += (0 - this.cameraBounceY) * (1 - Math.exp(-14.0 * dt));
+      this.cameraTilt += (0 - this.cameraTilt) * (1 - Math.exp(-8.0 * dt));
     }
 
     this.particles.update(dt, -40);

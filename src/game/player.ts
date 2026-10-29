@@ -27,12 +27,15 @@ export class Player {
   deadT = 0;
   runT = 0;
   flipT = 0; // Double jump acrobatic front-flip timer
+  airTime = 0; // Time in air during current jump
+  landT = 1; // Time elapsed since touchdown (for landing squash/recovery uncoil)
 
   animal: AnimalDefinition = ANIMALS.fox;
 
   private coyote = 0;
   private buf = 0;
   private squash = 0;
+  private squashVel = 0;
   private stretch = 0;
   private slideTimer = 0;
   private stepT = 0;
@@ -56,9 +59,12 @@ export class Player {
     this.deadT = 0;
     this.runT = 0;
     this.flipT = 0;
+    this.airTime = 0;
+    this.landT = 1;
     this.coyote = 0;
     this.buf = 0;
     this.squash = 0;
+    this.squashVel = 0;
     this.stretch = 0;
     this.slideTimer = 0;
     this.currentLean = 0;
@@ -116,9 +122,29 @@ export class Player {
     this.slideTimer -= dt;
     this.ghostT -= dt;
 
-    // Physical recovery from landing squash and takeoff stretch
-    this.squash = Math.max(0, this.squash - dt * phys.landingRecovery);
-    this.stretch = Math.max(0, this.stretch - dt * 5.5);
+    if (this.grounded) {
+      this.airTime = 0;
+      this.landT += dt;
+    } else {
+      this.airTime += dt;
+      this.landT = 0;
+    }
+
+    // Physical recovery: 2nd-order damped harmonic spring for organic, high-fidelity landing settle
+    if (this.squash > 0.001 || Math.abs(this.squashVel) > 0.001) {
+      const springK = 380 * phys.landingRecovery;
+      const damping = 34 * Math.sqrt(phys.landingRecovery);
+      this.squashVel -= (springK * this.squash + damping * this.squashVel) * dt;
+      this.squash += this.squashVel * dt;
+      if (this.squash < 0) {
+        this.squash = 0;
+        this.squashVel = Math.max(0, this.squashVel);
+      }
+    } else {
+      this.squash = 0;
+      this.squashVel = 0;
+    }
+    this.stretch = Math.max(0, this.stretch - dt * 6.5);
     if (this.flipT > 0) {
       this.flipT = Math.max(0, this.flipT - dt);
     }
@@ -131,19 +157,22 @@ export class Player {
         this.coyote = 0;
         this.buf = 0;
         this.jumps = 1;
-        this.stretch = 1;
+        this.stretch = 1.0;
+        this.airTime = 0;
+        this.landT = 0;
         this.onEvent("jump");
       } else if (this.jumps < 2) {
         this.vy = phys.doubleJumpForce;
         this.buf = 0;
         this.jumps = 2;
-        this.stretch = 0.85;
+        this.stretch = 0.9;
+        this.airTime = 0;
         this.flipT = 0.38; // 380ms acrobatic front flip
         this.onEvent("dbl");
       }
     }
 
-    // Realistic vertical ballistics, acrobatic apex float & gravity
+    // Realistic vertical ballistics, acrobatic apex float & gravity with Velocity Verlet integration
     if (!this.grounded) {
       const baseGravity = 2100;
       // Apex Float & Hang-time: gravity is cut in half when near arc zenith (|vy| < 130)
@@ -151,8 +180,12 @@ export class Player {
       const apexDampener = isApex ? 0.48 : 1.0;
       const g = baseGravity * phys.gravityMultiplier * (this.fastFall ? 2.4 : apexDampener);
       const impactVy = -this.vy;
+      const prevVy = this.vy;
       this.vy = Math.max(this.vy - g * dt, -1650);
-      this.py += this.vy * dt;
+
+      // Velocity Verlet / Midpoint integration: 2nd-order exact parabolic trajectory
+      const stepVy = (prevVy + this.vy) * 0.5;
+      this.py += stepVy * dt;
 
       // Realistic ground impact
       if (this.py <= 0) {
@@ -165,9 +198,12 @@ export class Player {
         this.jumps = 0;
         this.flipT = 0;
         this.coyote = 0.11;
+        this.airTime = 0;
+        this.landT = 0;
         // Compression proportional to animal mass AND impact velocity
         const impactFactor = clamp(impactVy / 600, 0.6, 2.2);
-        this.squash = Math.min(1.5, phys.landingSquash * (phys.mass / 20) * impactFactor);
+        this.squash = Math.min(1.4, phys.landingSquash * (phys.mass / 20) * impactFactor);
+        this.squashVel = this.squash * 14;
         this.onEvent("land", { impactVy, hardLanding, fastFallLanding });
       }
     } else {
@@ -184,9 +220,10 @@ export class Player {
     const cycleSpeed = (speedPxPerSec / effectiveStride) * (this.sliding ? 0.6 : 1.0);
     this.runT += dt * cycleSpeed;
 
-    // Smooth racing bank / lean based on turning agility
+    // Smooth racing bank / lean based on turning agility (frame-rate independent exponential smoothing)
     const targetLean = this.grounded ? 0.04 : clamp(-this.vy * 0.00022, -0.22, 0.28);
-    this.currentLean += (targetLean - this.currentLean) * Math.min(1, dt * phys.turnResponsiveness);
+    const leanBlend = 1 - Math.exp(-phys.turnResponsiveness * dt);
+    this.currentLean += (targetLean - this.currentLean) * leanBlend;
   }
 
   /** Footstep / slide timing helper */
@@ -256,7 +293,14 @@ export class Player {
     }
 
     // Masterclass 2D Animal Model Rendering
-    const flipRotation = this.flipT > 0 ? (1 - this.flipT / 0.38) * Math.PI * 2 : 0;
+    // Athletic gymnastic front-flip curve (tight coil, rapid rotational speed, decelerate to land)
+    let flipRotation = 0;
+    if (this.flipT > 0) {
+      const p = clamp(1 - this.flipT / 0.38, 0, 1);
+      const ease = p + 0.12 * Math.sin(p * TAU);
+      flipRotation = ease * TAU;
+    }
+
     ctx.save();
     ctx.globalAlpha = (this.ghostT > 0 ? 0.72 : (id === "moon_fox" ? 0.95 : 1)) * fade;
     Animal2DRenderer.render(ctx, x, gy - this.py, animal, {
@@ -273,6 +317,9 @@ export class Player {
       flipRotation,
       isDead: this.dead,
       deadT: this.deadT,
+      airTime: this.airTime,
+      landT: this.landT,
+      py: this.py,
     });
     ctx.restore();
   }

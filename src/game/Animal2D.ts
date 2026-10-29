@@ -19,6 +19,9 @@ export interface AnimalAnimParams {
   flipRotation?: number; // Double jump acrobatic front-flip rotation
   isDead?: boolean;
   deadT?: number;
+  airTime?: number; // Time elapsed during jump in air
+  landT?: number; // Time elapsed since touchdown (for landing recovery sequence)
+  py?: number; // Player altitude above ground in px
 }
 
 function getFoxAssetUrl(path: string): string {
@@ -178,6 +181,63 @@ if (typeof window !== "undefined") {
 }
 
 export class Animal2DRenderer {
+  /**
+   * Biomechanically accurate 8-frame jump sequence resolver:
+   * Frame 0: Takeoff anticipatory crouch / spring coil
+   * Frame 1: Liftoff explosive spring
+   * Frame 2: Ascending tuck
+   * Frame 3: Apex weightless float / soaring hang time
+   * Frame 4: Descending flight
+   * Frame 5: Falling reach (paws extended forward toward ground)
+   * Frame 6: Touchdown ground impact squash
+   * Frame 7: Springy recovery uncoil into galloping stride
+   */
+  static getJumpFrameIndex(anim: AnimalAnimParams): number {
+    const { isGrounded, vy, squash, airTime = 0, landT = 1, py = 0 } = anim;
+
+    // 1. GROUNDED LANDING IMPACT & RECOVERY (plays on touchdown)
+    if (isGrounded) {
+      if (landT < 0.18 || squash > 0.08) {
+        // Frame 6 during initial touchdown impact compression, then Frame 7 for springy uncoil
+        return landT < 0.07 || squash > 0.28 ? 6 : 7;
+      }
+      return -1; // Not in jump state -> use normal run/idle sheet
+    }
+
+    // 2. AIRBORNE TRAJECTORY
+    // (a) Explosive takeoff burst: first ~55ms
+    if (airTime < 0.055 && vy > 260) {
+      return airTime < 0.022 ? 0 : 1;
+    }
+
+    // (b) Takeoff leap
+    if (vy > 320) {
+      return 1;
+    }
+
+    // (c) Rising tuck
+    if (vy > 75) {
+      return 2;
+    }
+
+    // (d) Apex soaring float
+    if (vy >= -90) {
+      return 3;
+    }
+
+    // (e) Descending flight
+    // If approaching the ground closely, extend paws early
+    if (py < 42 && vy < -120) {
+      return 5;
+    }
+    if (vy >= -360) {
+      return 4;
+    }
+
+    // (f) Terminal descent / ground reach
+    return 5;
+  }
+
   static renderFoxSprite(
     ctx: CanvasRenderingContext2D,
     anim: AnimalAnimParams,
@@ -188,30 +248,19 @@ export class Animal2DRenderer {
       return false;
     }
 
-    const { time, runCycle, speed, isGrounded, vy, isSliding, squash } = anim;
+    const { time, runCycle, speed, isGrounded } = anim;
+    const jumpFrame = Animal2DRenderer.getJumpFrameIndex(anim);
+    const inJump = jumpFrame >= 0;
 
     let sheet: HTMLImageElement;
     let frameIdx = 0;
 
-    if (isSliding && FoxSpriteManager.crouchSheet?.complete && FoxSpriteManager.crouchSheet.naturalWidth > 0) {
+    if (anim.isSliding && FoxSpriteManager.crouchSheet?.complete && FoxSpriteManager.crouchSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.crouchSheet;
       frameIdx = 0;
-    } else if (!isGrounded && FoxSpriteManager.jumpSheet?.complete && FoxSpriteManager.jumpSheet.naturalWidth > 0) {
+    } else if (inJump && FoxSpriteManager.jumpSheet?.complete && FoxSpriteManager.jumpSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.jumpSheet;
-      // 8-frame jump sequence based on ballistics:
-      if (squash > 0.35) {
-        frameIdx = 6; // Landing squash
-      } else if (vy > 400) {
-        frameIdx = 1; // Takeoff leap
-      } else if (vy > 150) {
-        frameIdx = 2; // Rising
-      } else if (vy > -150) {
-        frameIdx = 3; // Apex float
-      } else if (vy > -400) {
-        frameIdx = 4; // Descent
-      } else {
-        frameIdx = 5; // Falling reach
-      }
+      frameIdx = jumpFrame;
     } else if (isGrounded && speed > 20 && FoxSpriteManager.runSheet?.complete && FoxSpriteManager.runSheet.naturalWidth > 0) {
       sheet = FoxSpriteManager.runSheet;
       frameIdx = Math.floor(runCycle * 8) % 8;
@@ -254,30 +303,19 @@ export class Animal2DRenderer {
       return false;
     }
 
-    const { time, runCycle, speed, isGrounded, vy, isSliding, squash } = anim;
+    const { time, runCycle, speed, isGrounded } = anim;
+    const jumpFrame = Animal2DRenderer.getJumpFrameIndex(anim);
+    const inJump = jumpFrame >= 0;
 
     let sheet: HTMLImageElement;
     let frameIdx = 0;
 
-    if (isSliding && PandaSpriteManager.sitSheet?.complete && PandaSpriteManager.sitSheet.naturalWidth > 0) {
+    if (anim.isSliding && PandaSpriteManager.sitSheet?.complete && PandaSpriteManager.sitSheet.naturalWidth > 0) {
       sheet = PandaSpriteManager.sitSheet;
       frameIdx = 0;
-    } else if (!isGrounded && PandaSpriteManager.jumpSheet?.complete && PandaSpriteManager.jumpSheet.naturalWidth > 0) {
+    } else if (inJump && PandaSpriteManager.jumpSheet?.complete && PandaSpriteManager.jumpSheet.naturalWidth > 0) {
       sheet = PandaSpriteManager.jumpSheet;
-      // 8-frame jump sequence based on ballistics:
-      if (squash > 0.35) {
-        frameIdx = 6; // Landing impact recovery
-      } else if (vy > 400) {
-        frameIdx = 1; // Takeoff leap
-      } else if (vy > 150) {
-        frameIdx = 2; // Rising leap
-      } else if (vy > -150) {
-        frameIdx = 3; // Apex airborne float
-      } else if (vy > -400) {
-        frameIdx = 4; // Descending leap
-      } else {
-        frameIdx = 5; // Landing touch
-      }
+      frameIdx = jumpFrame;
     } else if (isGrounded && speed > 20 && PandaSpriteManager.runSheet?.complete && PandaSpriteManager.runSheet.naturalWidth > 0) {
       sheet = PandaSpriteManager.runSheet;
       frameIdx = Math.floor(runCycle * 8) % 8;
@@ -319,7 +357,9 @@ export class Animal2DRenderer {
       return false;
     }
 
-    const { time, runCycle, speed, isGrounded, vy, isSliding, squash, isDead, deadT } = anim;
+    const { time, runCycle, speed, isGrounded, isDead, deadT } = anim;
+    const jumpFrame = Animal2DRenderer.getJumpFrameIndex(anim);
+    const inJump = jumpFrame >= 0;
 
     let sheet: HTMLImageElement;
     let frameIdx = 0;
@@ -329,25 +369,13 @@ export class Animal2DRenderer {
       sheet = DeerSpriteManager.deathSheet;
       // 8-frame collapse sequence from t = 0 to 1
       frameIdx = Math.min(7, Math.floor((deadT ?? 0) * 8));
-    } else if (isSliding && DeerSpriteManager.deathSheet?.complete && DeerSpriteManager.deathSheet.naturalWidth > 0) {
+    } else if (anim.isSliding && DeerSpriteManager.deathSheet?.complete && DeerSpriteManager.deathSheet.naturalWidth > 0) {
       // Low sliding stance uses crouching collapse transition frame
       sheet = DeerSpriteManager.deathSheet;
       frameIdx = 2;
-    } else if (!isGrounded && DeerSpriteManager.jumpSheet?.complete && DeerSpriteManager.jumpSheet.naturalWidth > 0) {
+    } else if (inJump && DeerSpriteManager.jumpSheet?.complete && DeerSpriteManager.jumpSheet.naturalWidth > 0) {
       sheet = DeerSpriteManager.jumpSheet;
-      if (squash > 0.35) {
-        frameIdx = 6; // Landing impact
-      } else if (vy > 400) {
-        frameIdx = 1; // Takeoff leap
-      } else if (vy > 150) {
-        frameIdx = 2; // Rising leap
-      } else if (vy > -150) {
-        frameIdx = 3; // Apex airborne float
-      } else if (vy > -400) {
-        frameIdx = 4; // Descending leap
-      } else {
-        frameIdx = 5; // Landing touch
-      }
+      frameIdx = jumpFrame;
     } else if (isGrounded && speed > 20 && DeerSpriteManager.runSheet?.complete && DeerSpriteManager.runSheet.naturalWidth > 0) {
       sheet = DeerSpriteManager.runSheet;
       frameIdx = Math.floor(runCycle * 8) % 8;
@@ -384,7 +412,9 @@ export class Animal2DRenderer {
       return false;
     }
 
-    const { time, runCycle, speed, isGrounded, vy, isSliding, squash, isDead, deadT } = anim;
+    const { time, runCycle, speed, isGrounded, isDead, deadT } = anim;
+    const jumpFrame = Animal2DRenderer.getJumpFrameIndex(anim);
+    const inJump = jumpFrame >= 0;
 
     let sheet: HTMLImageElement;
     let frameIdx = 0;
@@ -394,37 +424,18 @@ export class Animal2DRenderer {
       sheet = LionSpriteManager.deathSheet;
       // 8-frame collapse sequence from t = 0 to 1
       frameIdx = Math.min(7, Math.floor((deadT ?? 0) * 8));
-    } else if (isSliding && LionSpriteManager.deathSheet?.complete && LionSpriteManager.deathSheet.naturalWidth > 0) {
+    } else if (anim.isSliding && LionSpriteManager.deathSheet?.complete && LionSpriteManager.deathSheet.naturalWidth > 0) {
       // Low sliding stance uses crouching collapse transition frame
       sheet = LionSpriteManager.deathSheet;
       frameIdx = 2;
-    } else if (!isGrounded && LionSpriteManager.jumpSheet?.complete && LionSpriteManager.jumpSheet.naturalWidth > 0) {
+    } else if (inJump && LionSpriteManager.jumpSheet?.complete && LionSpriteManager.jumpSheet.naturalWidth > 0) {
       sheet = LionSpriteManager.jumpSheet;
-      // 8-frame ballistic jumping sequence:
-      // f0: takeoff crouch, f1: spring, f2: rising leap, f3: soaring pounce,
-      // f4: high apex flight, f5: descending reach, f6: landing touch, f7: recovery
-      if (squash > 0.35) {
-        frameIdx = 6; // Landing touch impact
-      } else if (vy > 400) {
-        frameIdx = 1; // Springing ascent
-      } else if (vy > 180) {
-        frameIdx = 2; // Rising leap
-      } else if (vy > -120) {
-        frameIdx = 3; // Soaring pounce
-      } else if (vy > -320) {
-        frameIdx = 4; // High apex flight
-      } else if (vy > -500) {
-        frameIdx = 5; // Descending reach
-      } else {
-        frameIdx = 7; // Landing recovery
-      }
+      frameIdx = jumpFrame;
     } else if (isGrounded && speed > 20 && LionSpriteManager.runSheet?.complete && LionSpriteManager.runSheet.naturalWidth > 0) {
       sheet = LionSpriteManager.runSheet;
-      // 8-frame smooth rhythmic running cycle synced to stride distance
       frameIdx = Math.floor(runCycle * 8) % 8;
     } else if (LionSpriteManager.idleSheet?.complete && LionSpriteManager.idleSheet.naturalWidth > 0) {
       sheet = LionSpriteManager.idleSheet;
-      // 8-frame idle breathing cycle at ~10 FPS
       frameIdx = Math.floor(time * 10) % 8;
     } else {
       return false;
@@ -475,16 +486,28 @@ export class Animal2DRenderer {
 
     // Dynamic lean, acrobatic flips & inspection tilt
     const runningLean = isGrounded && speed > 20 ? 0.05 : 0;
-    const inAirPitch = !isGrounded ? clamp(-vy * 0.00024, -0.25, 0.28) : 0;
+    // Smooth flight pitch based on velocity vector tangent:
+    const inAirPitch = !isGrounded ? clamp(-vy * 0.00022, -0.22, 0.25) : 0;
     const totalRotation = runningLean + inAirPitch + inspectPitch * 0.15 + flipRotation;
-    ctx.rotate(totalRotation);
 
-    // Squash & stretch deformation
+    // Center-of-mass pivot offset (pivots in air around mid-torso, preventing paws pendulum displacement!)
+    const pivotY = -38 * scale;
+    ctx.translate(0, pivotY);
+    ctx.rotate(totalRotation);
+    ctx.translate(0, -pivotY);
+
+    // High-refresh rate squash & stretch deformation
     let sx = scale * (1 + squash * 0.28 - stretch * 0.1);
     let sy = scale * (1 - squash * 0.26 + stretch * 0.14);
     if (isSliding) {
       sx *= 1.22;
       sy *= 0.52;
+    }
+    // Aerodynamic apex soar elongation: weightless glide feel at peak of trajectory
+    if (!isGrounded && Math.abs(vy) < 140) {
+      const apexFactor = 1 - Math.abs(vy) / 140;
+      sx *= 1 + 0.045 * apexFactor;
+      sy *= 1 - 0.025 * apexFactor;
     }
     // Inspection horizontal tilt compression
     sx *= 1 - Math.abs(inspectTilt) * 0.12;
@@ -515,9 +538,11 @@ export class Animal2DRenderer {
 
     ctx.scale(sx, sy);
 
-    // Idle breathing & dynamic running bounce
+    // Idle breathing & dynamic running bounce (disabled during airborne jump for pure ballistic trajectory)
     const isRunning = isGrounded && speed > 20;
-    const bodyBob = isRunning
+    const bodyBob = !isGrounded
+      ? 0
+      : isRunning
       ? Math.sin(runCycle * TAU) * (id === "deer" ? 3.4 : id === "panda" ? 2.0 : 2.6)
       : Math.sin(time * 2.2) * 1.2;
 
@@ -670,7 +695,7 @@ export class Animal2DRenderer {
 
     } else {
       // In-Air Flight Paws (rising = tucked, falling = reaching)
-      const u = clamp(vy / 1100, -1, 1) * 0.5 + 0.5; // 0 rising -> 1 falling
+      const u = clamp(-vy / 1100, -1, 1) * 0.5 + 0.5; // 0 rising -> 1 falling
       const foreTuckX = lerp(shoulderX + 16, shoulderX + 8, u);
       const foreTuckY = lerp(-14, -2, u);
       const hindTuckX = lerp(hipX - 12, hipX - 5, u);
@@ -751,11 +776,11 @@ export class Animal2DRenderer {
     const streamX = -windDrag * 8.5; // Horizontal streaming lag
     const airFlutter = Math.sin(time * 26 + 1.2) * (windDrag * 1.6);
 
-    // In-air vertical inertia & air resistance
-    // On upward leap (vy < 0): heavy tail drags down relative to rising pelvis
-    // On downward drop (vy > 0): upward air stream billows fluffy brush upward like a parachute
-    const inAirLag = !isGrounded ? clamp(-vy * 0.016, -10, 10) : 0;
-    const inAirBillow = !isGrounded ? clamp(vy * 0.024, 0, 14) : 0;
+    // In-air vertical inertia & aerodynamic drag
+    // On upward leap (vy > 0): airstream drags tail plume downward
+    // On downward drop (vy < 0): upward air resistance billows tail plume upward like a parachute
+    const inAirLag = !isGrounded ? clamp(vy * 0.016, -10, 10) : 0;
+    const inAirBillow = !isGrounded ? clamp(-vy * 0.024, 0, 14) : 0;
     const slideDrop = isSliding ? 13 : 0;
 
     // Quadruped gallop/trot gait wave frequency with traveling phase lag
